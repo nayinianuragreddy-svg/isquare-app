@@ -3,9 +3,10 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
-import { Header, Avatar, StatusBadge, SeverityTag, I2Button, BottomSheet } from "../components/shared";
+import { Header, Avatar, StatusBadge, SeverityTag, I2Button, BottomSheet, Lightbox, Skeleton } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { toast } from "../lib/toast";
 
 const STATUS_STEPS = ["Open", "Pending", "In Progress", "Resolved"];
 
@@ -24,6 +25,7 @@ export default function PostDetail() {
   const [similarPosts, setSimilarPosts] = useState([]);
   const [mergeRequests, setMergeRequests] = useState([]);
   const [mergesSent, setMergesSent] = useState({});
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   useEffect(() => {
     if (!post) fetchPost();
@@ -115,6 +117,7 @@ export default function PostDetail() {
       await supabase.from("votes").delete().eq("post_id", id).eq("user_id", user.id);
       await supabase.from("posts").update({ agree_count: Math.max(0, post.agree - 1) }).eq("id", id);
     } else {
+      toast("Your voice added");
       await supabase.from("votes").insert({ post_id: id, user_id: user.id });
       await supabase.from("posts").update({ agree_count: post.agree + 1 }).eq("id", id);
     }
@@ -127,6 +130,7 @@ export default function PostDetail() {
     setReplyText("");
     await supabase.from("comments").insert({ post_id: id, author_id: user.id, text });
     await supabase.from("posts").update({ comments_count: (post?.comments || 0) + 1 }).eq("id", id);
+    toast("Reply posted");
     setLoading(false);
   };
 
@@ -135,12 +139,14 @@ export default function PostDetail() {
     setMergesSent(p => ({ ...p, [targetId]: "sending" }));
     await supabase.from("merge_requests").insert({ requester_post_id: id, target_post_id: targetId, requester_id: user.id });
     setMergesSent(p => ({ ...p, [targetId]: "sent" }));
+    toast("Merge request sent");
   };
 
   const handleMerge = async (req, accept) => {
     if (!accept) {
       await supabase.from("merge_requests").update({ status: "rejected" }).eq("id", req.id);
       setMergeRequests(prev => prev.filter(r => r.id !== req.id));
+      toast("Merge rejected", "info");
       return;
     }
     const reqPost = req.posts;
@@ -150,6 +156,7 @@ export default function PostDetail() {
     await supabase.from("notifications").insert({ user_id: req.requester_id, type: "merge_accepted", title: "Merge accepted! 🤝", body: `Your ${reqPost.category} post was merged. Combined voices are louder.`, post_id: id });
     setPost(p => ({ ...p, agree: (p?.agree || 0) + (reqPost.agree_count || 0) }));
     setMergeRequests(prev => prev.filter(r => r.id !== req.id));
+    toast("Issues merged! Voices combined 🤝");
   };
 
   const shareWhatsApp = () => {
@@ -160,7 +167,30 @@ export default function PostDetail() {
   if (!post) return (
     <PhoneFrame>
       <Header title="" onBack={() => navigate("/feed")} />
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text2, fontSize: 14, fontFamily: F.body }}>Loading...</div>
+      <div style={{ flex: 1, padding: 16 }}>
+        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+          <Skeleton width={48} height={48} style={{ borderRadius: "50%", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <Skeleton width="50%" height={16} style={{ marginBottom: 8 }} />
+            <Skeleton width="30%" height={12} style={{ marginBottom: 6 }} />
+            <Skeleton width="40%" height={12} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          <Skeleton width={60} height={22} style={{ borderRadius: 4 }} />
+          <Skeleton width={80} height={22} style={{ borderRadius: 4 }} />
+          <Skeleton width={60} height={22} style={{ borderRadius: 4 }} />
+        </div>
+        <Skeleton width="100%" height={16} style={{ marginBottom: 8 }} />
+        <Skeleton width="90%" height={16} style={{ marginBottom: 8 }} />
+        <Skeleton width="70%" height={16} style={{ marginBottom: 16 }} />
+        <Skeleton width="100%" height={200} style={{ borderRadius: 14, marginBottom: 16 }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <Skeleton width={80} height={32} style={{ borderRadius: 20 }} />
+          <Skeleton width={60} height={32} style={{ borderRadius: 20 }} />
+          <Skeleton width={70} height={32} style={{ borderRadius: 20 }} />
+        </div>
+      </div>
     </PhoneFrame>
   );
 
@@ -215,7 +245,7 @@ export default function PostDetail() {
           {post.photos?.length > 0 && (
             <div style={{ display: "flex", gap: 8, overflowX: "auto", marginBottom: 14 }}>
               {post.photos.map((url, i) => (
-                <div key={i} style={{ minWidth: post.photos.length === 1 ? "100%" : 200, height: 220, borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0 }}>
+                <div key={i} onClick={() => setLightboxSrc(url)} style={{ minWidth: post.photos.length === 1 ? "100%" : 200, height: 220, borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0, cursor: "zoom-in" }}>
                   <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
               ))}
@@ -315,14 +345,16 @@ export default function PostDetail() {
 
       <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)}>
         {[{ label: "Share on WhatsApp", action: () => { setMenuOpen(false); shareWhatsApp(); } },
-          { label: "Copy link", action: async () => { setMenuOpen(false); try { await navigator.clipboard.writeText(window.location.href); } catch {} } },
-          { label: "Report this post", action: () => { setMenuOpen(false); alert("Report submitted. Our team will review within 24 hours."); } },
+          { label: "Copy link", action: async () => { setMenuOpen(false); try { await navigator.clipboard.writeText(window.location.href); toast("Link copied"); } catch {} } },
+          { label: "Report this post", action: () => { setMenuOpen(false); toast("Report submitted", "info"); } },
           { label: "Cancel", action: () => setMenuOpen(false), muted: true }].map((item, i) => (
           <button key={i} onClick={item.action} style={{ width: "100%", padding: "14px 0", background: "none", border: "none", color: item.muted ? C.text2 : C.text, fontSize: 15, fontWeight: 600, textAlign: "left", cursor: "pointer", borderTop: i === 0 ? "none" : `1px solid ${C.border}`, fontFamily: F.body }}>
             {item.label}
           </button>
         ))}
       </BottomSheet>
+
+      <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </PhoneFrame>
   );
 }

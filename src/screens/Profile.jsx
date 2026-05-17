@@ -6,6 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Header, Btn, Input, BottomSheet } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { toast } from "../lib/toast";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -40,7 +41,8 @@ export default function Profile() {
     try {
       await saveProfile({ name: editForm.name, username: editForm.username, residence: editForm.residence });
       setEditing(false);
-    } catch (e) { console.error(e); }
+      toast("Profile saved");
+    } catch (e) { console.error(e); toast("Save failed", "error"); }
     setSaving(false);
   };
 

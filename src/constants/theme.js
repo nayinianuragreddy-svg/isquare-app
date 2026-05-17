@@ -40,8 +40,21 @@ export const STYLES = `
   .heat-hot { animation: heatPulse 2s ease-in-out infinite; border-color: rgba(240,68,56,0.4) !important; }
   .heat-warm { animation: warmPulse 2.5s ease-in-out infinite; border-color: rgba(255,176,32,0.4) !important; }
   .heat-rising { animation: risePulse 3s ease-in-out infinite; border-color: rgba(120,86,255,0.4) !important; }
+  @keyframes pageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .page-in { animation: pageIn 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes toastIn { from { transform: translateY(40px) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+  @keyframes toastOut { from { transform: translateY(0) scale(1); opacity: 1; } to { transform: translateY(40px) scale(0.9); opacity: 0; } }
+  @keyframes shockwave { from { width: 0; height: 0; opacity: 0.8; } to { width: 500px; height: 500px; margin-top: -250px; margin-left: -250px; opacity: 0; } }
+  @keyframes glowExpand { from { width: 0; height: 0; } to { width: 400px; height: 400px; margin-top: -200px; margin-left: -200px; } }
+  @keyframes logoReveal { from { transform: scale(0) rotate(-10deg); opacity: 0; } to { transform: scale(1) rotate(0deg); opacity: 1; } }
+  @keyframes floatUp { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+  @keyframes loadBar { from { width: 0%; } to { width: 100%; } }
+  @keyframes gridDraw { from { opacity: 0; } to { opacity: 0.08; } }
+  @keyframes navBounce { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+  .nav-active-icon { animation: navBounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes pullSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; background: #050508; }
+  body { margin: 0; background: #050508; overscroll-behavior: none; }
   .skeleton { background: linear-gradient(90deg, #14141B 0%, #1F1F2A 50%, #14141B 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
   .slide-up { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
   .fade-in { animation: fadeIn 0.3s ease-out; }

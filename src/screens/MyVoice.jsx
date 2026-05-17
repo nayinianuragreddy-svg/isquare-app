@@ -3,10 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
-import { StatusBadge, SeverityTag, I2Button } from "../components/shared";
+import { StatusBadge, SeverityTag, I2Button, PostCardSkeleton } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
-import { MOCK_MY_VOICE_PUBLIC, MOCK_MY_VOICE_PRIVATE } from "../data/mockData";
 
 export default function MyVoice() {
   const navigate = useNavigate();
@@ -23,21 +22,16 @@ export default function MyVoice() {
   const fetchMyPosts = async () => {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase.from("posts").select("*").eq("author_id", user.id).order("created_at", { ascending: false });
-    if (data && data.length > 0) {
-      const mapped = data.map(p => ({
-        id: p.id, cat: p.category, severity: p.severity, date: timeAgo(p.created_at),
-        desc: p.description, status: p.status, type: p.type === "public" ? "Public" : "Private",
-        agree: p.agree_count, comments: p.comments_count, verified: true, routedTo: p.routed_to,
-      }));
-      setMyPosts(mapped);
-    } else {
-      setMyPosts([...MOCK_MY_VOICE_PUBLIC, ...MOCK_MY_VOICE_PRIVATE]);
-    }
+    const mapped = (data || []).map(p => ({
+      id: p.id, cat: p.category, severity: p.severity, date: timeAgo(p.created_at),
+      desc: p.description, status: p.status, type: p.type === "public" ? "Public" : "Private",
+      agree: p.agree_count, comments: p.comments_count, verified: true, routedTo: p.routed_to,
+    }));
+    setMyPosts(mapped);
     setLoading(false);
   };
 
-  const allPosts = myPosts.length > 0 ? myPosts : [...MOCK_MY_VOICE_PUBLIC, ...MOCK_MY_VOICE_PRIVATE];
-  const typePosts = allPosts.filter(p => filter === "Public" ? p.type === "Public" : p.type === "Private");
+  const typePosts = myPosts.filter(p => filter === "Public" ? p.type === "Public" : p.type === "Private");
   const filtered = typePosts.filter(p => statusFilter === "All" || p.status === statusFilter);
 
   return (
@@ -67,12 +61,22 @@ export default function MyVoice() {
       </div>
 
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {filtered.length === 0 ? (
+        {loading ? (
+          Array(3).fill(0).map((_, i) => <PostCardSkeleton key={i} />)
+        ) : filtered.length === 0 ? (
           <div style={{ padding: "60px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🎤</div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, fontFamily: F.body }}>No {filter === "Public" ? "posts" : "requests"} yet</div>
-            <div style={{ color: C.text2, fontSize: 14, marginBottom: 20, fontFamily: F.body }}>{filter === "Public" ? "Speak up about issues in your area." : "Send a personal request to your representative."}</div>
-            <button onClick={() => navigate("/create", { state: { type: filter === "Public" ? "public" : "private" } })} style={{ background: C.gradient, color: C.text, padding: "10px 20px", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: F.body }}>Create now</button>
+            <div style={{ position: "relative", display: "inline-block", marginBottom: 20 }}>
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}20, ${C.accent}10)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", animation: "pulse1 3s ease-in-out infinite" }}>
+                {filter === "Public" ? (
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2" strokeLinecap="round"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+                ) : (
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                )}
+              </div>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>{filter === "Public" ? "No issues raised yet" : "No requests sent yet"}</div>
+            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, marginBottom: 20, maxWidth: 260, margin: "0 auto 20px" }}>{filter === "Public" ? "Be the change. Raise an issue and your neighborhood will rally behind you." : "Reach your representative directly with a private request."}</div>
+            <button onClick={() => navigate("/create", { state: { type: filter === "Public" ? "public" : "private" } })} style={{ padding: "12px 28px", borderRadius: 24, background: C.gradient, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.3)" }}>{filter === "Public" ? "Speak Up" : "Send Request"}</button>
           </div>
         ) : filtered.map((t, i) => (
           <article key={t.id || i} style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12 }}>
@@ -125,9 +129,12 @@ function BottomNavBar({ active, navigate }) {
           </button>
         );
         return (
-          <button key={n.id} onClick={() => navigate("/" + (n.id === "feed" ? "feed" : n.id))} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 60 }}>
-            <n.Icon a={isActive} />
+          <button key={n.id} onClick={() => { if (navigator.vibrate) navigator.vibrate(8); navigate("/" + (n.id === "feed" ? "feed" : n.id)); }} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 60, transition: "color 0.2s", position: "relative" }}>
+            <div className={isActive ? "nav-active-icon" : ""} style={{ display: "flex" }}>
+              <n.Icon a={isActive} />
+            </div>
             <span style={{ fontSize: 10, fontWeight: 600, fontFamily: F.body }}>{n.label}</span>
+            {isActive && <div style={{ position: "absolute", bottom: -4, width: 4, height: 4, borderRadius: "50%", background: C.gradient }} />}
           </button>
         );
       })}

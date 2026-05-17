@@ -78,14 +78,20 @@ export const SeverityTag = ({ level, blink = true }) => {
   );
 };
 
-export const I2Button = ({ active, count, onClick }) => (
-  <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: active ? C.purpleDim : "transparent", border: `1px solid ${active ? C.purple : C.border}`, borderRadius: 20, cursor: "pointer", color: active ? C.purple : C.text2, fontSize: 13, fontWeight: 600, transition: "all 0.2s", fontFamily: F.body }}>
-    <span style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 900, fontSize: 15, lineHeight: 1, display: "inline-flex", alignItems: "flex-start", letterSpacing: -0.5 }}>
-      i<span style={{ fontSize: 9, marginLeft: 0, marginTop: -2, lineHeight: 1 }}>²</span>
-    </span>
-    <span>{count?.toLocaleString()}</span>
-  </button>
-);
+export const I2Button = ({ active, count, onClick }) => {
+  const handleClick = (e) => {
+    if (navigator.vibrate) navigator.vibrate(12);
+    onClick?.(e);
+  };
+  return (
+    <button onClick={handleClick} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: active ? C.purpleDim : "transparent", border: `1px solid ${active ? C.purple : C.border}`, borderRadius: 20, cursor: "pointer", color: active ? C.purple : C.text2, fontSize: 13, fontWeight: 600, transition: "all 0.2s", fontFamily: F.body, transform: active ? "scale(1)" : "scale(1)" }}>
+      <span style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 900, fontSize: 15, lineHeight: 1, display: "inline-flex", alignItems: "flex-start", letterSpacing: -0.5 }}>
+        i<span style={{ fontSize: 9, marginLeft: 0, marginTop: -2, lineHeight: 1 }}>²</span>
+      </span>
+      <span>{count?.toLocaleString()}</span>
+    </button>
+  );
+};
 
 export const BottomSheet = ({ open, onClose, children }) => {
   if (!open) return null;
@@ -102,6 +108,16 @@ export const BottomSheet = ({ open, onClose, children }) => {
 export const Skeleton = ({ width = "100%", height = 16, style = {} }) => (
   <div className="skeleton" style={{ width, height, borderRadius: 8, ...style }} />
 );
+
+export const Lightbox = ({ src, onClose }) => {
+  if (!src) return null;
+  return (
+    <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.96)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s", cursor: "pointer" }}>
+      <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", borderRadius: "50%", width: 40, height: 40, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, zIndex: 1, backdropFilter: "blur(10px)" }}>×</button>
+      <img src={src} alt="" onClick={e => e.stopPropagation()} style={{ maxWidth: "95%", maxHeight: "85%", objectFit: "contain", borderRadius: 12, touchAction: "pinch-zoom" }} />
+    </div>
+  );
+};
 
 export const PostCardSkeleton = () => (
   <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12 }}>

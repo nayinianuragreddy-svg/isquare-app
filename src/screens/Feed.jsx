@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
-import { Avatar, StatusBadge, SeverityTag, I2Button, PostCardSkeleton, BottomSheet } from "../components/shared";
+import { Avatar, StatusBadge, SeverityTag, I2Button, PostCardSkeleton, BottomSheet, Lightbox } from "../components/shared";
 import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
 import { MOCK_REP_POSTS } from "../data/mockData";
+import { toast } from "../lib/toast";
 
 const LOCATIONS = [
   { id: "saraswathi", name: "Saraswathi Colony", full: "Saraswathi Colony, Uppal, Hyderabad" },
@@ -34,6 +35,11 @@ export default function Feed() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const { user } = useAuth();
+  const [lightboxSrc, setLightboxSrc] = useState(null);
+  const scrollRef = useRef(null);
+  const touchStartY = useRef(0);
+  const [pullDist, setPullDist] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [newPostsCount, setNewPostsCount] = useState(0);
 
@@ -117,6 +123,7 @@ export default function Feed() {
       await supabase.from("votes").delete().eq("post_id", postId).eq("user_id", user.id);
       await supabase.from("posts").update({ agree_count: posts.find(p => p.id === postId)?.agree - 1 }).eq("id", postId);
     } else {
+      toast("Your voice added");
       await supabase.from("votes").insert({ post_id: postId, user_id: user.id });
       await supabase.from("posts").update({ agree_count: (posts.find(p => p.id === postId)?.agree || 0) + 1 }).eq("id", postId);
     }
@@ -243,7 +250,18 @@ export default function Feed() {
       </div>
 
       {/* Feed */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overscrollBehavior: "none" }}
+        onTouchStart={e => { if (scrollRef.current?.scrollTop === 0) touchStartY.current = e.touches[0].clientY; }}
+        onTouchMove={e => { if (!touchStartY.current) return; const d = e.touches[0].clientY - touchStartY.current; if (d > 0 && scrollRef.current?.scrollTop === 0) setPullDist(Math.min(d * 0.35, 70)); }}
+        onTouchEnd={() => { if (pullDist > 45 && !refreshing) { setRefreshing(true); fetchPosts().then(() => setRefreshing(false)); toast("Feed refreshed"); } setPullDist(0); touchStartY.current = 0; }}>
+
+        {/* Pull to refresh indicator */}
+        {(pullDist > 0 || refreshing) && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: refreshing ? 50 : pullDist, overflow: "hidden", transition: pullDist > 0 ? "none" : "height 0.3s" }}>
+            <div style={{ width: 24, height: 24, border: `2px solid ${C.purple}`, borderTop: `2px solid transparent`, borderRadius: "50%", animation: refreshing ? "pullSpin 0.6s linear infinite" : "none", transform: !refreshing ? `rotate(${pullDist * 4}deg)` : undefined, opacity: Math.min(pullDist / 50, 1) }} />
+          </div>
+        )}
+
         {feedTab === "speakup" && (
           <>
             {/* Stats */}
@@ -285,12 +303,17 @@ export default function Feed() {
               Array(4).fill(0).map((_, i) => <PostCardSkeleton key={i} />)
             ) : filteredPosts.length === 0 ? (
               <div style={{ padding: "60px 24px", textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🌱</div>
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, fontFamily: F.body }}>No issues yet</div>
-                <div style={{ color: C.text2, fontSize: 14, fontFamily: F.body }}>Be the first to speak up about your area.</div>
+                <div style={{ position: "relative", display: "inline-block", marginBottom: 20 }}>
+                  <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}20, ${C.accent}10)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", animation: "pulse1 3s ease-in-out infinite" }}>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2" strokeLinecap="round"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+                  </div>
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>Your neighborhood is quiet</div>
+                <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, marginBottom: 20, maxWidth: 260, margin: "0 auto 20px" }}>Be the first to raise a civic issue. One voice starts the movement.</div>
+                <button onClick={() => setCreateModalOpen(true)} style={{ padding: "12px 28px", borderRadius: 24, background: C.gradient, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.3)" }}>Speak Up</button>
               </div>
             ) : filteredPosts.map((p, idx) => (
-              <PostCard key={p.id} p={p} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} onShare={() => sharePost(p)} blinkCritical={idx === filteredPosts.findIndex(x => x.severity === "Critical")} />
+              <PostCard key={p.id} p={{ ...p, _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} onShare={() => sharePost(p)} blinkCritical={idx === filteredPosts.findIndex(x => x.severity === "Critical")} />
             ))}
           </>
         )}
@@ -348,6 +371,8 @@ export default function Feed() {
           </div>
         ))}
       </BottomSheet>
+
+      <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </PhoneFrame>
   );
 }
@@ -389,8 +414,8 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
         </div>
         <p style={{ margin: "0 0 12px", fontSize: 15, lineHeight: 1.5, color: C.text, fontFamily: F.body }}>{p.desc}</p>
         {p.photos?.[0] && (
-          <div style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <img src={p.photos[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div onClick={e => { e.stopPropagation(); p._onLightbox?.(p.photos[0]); }} style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 12, border: `1px solid ${C.border}`, cursor: "zoom-in" }}>
+            <img src={p.photos[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.2s" }} />
           </div>
         )}
         <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -485,9 +510,12 @@ function BottomNav({ active, onCreate }) {
           </button>
         );
         return (
-          <button key={n.id} onClick={() => navigate("/" + (n.id === "feed" ? "feed" : n.id))} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 60, transition: "color 0.2s" }}>
-            <n.Icon a={isActive} />
+          <button key={n.id} onClick={() => { if (navigator.vibrate) navigator.vibrate(8); navigate("/" + (n.id === "feed" ? "feed" : n.id)); }} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 60, transition: "color 0.2s", position: "relative" }}>
+            <div className={isActive ? "nav-active-icon" : ""} style={{ display: "flex" }}>
+              <n.Icon a={isActive} />
+            </div>
             <span style={{ fontSize: 10, fontWeight: 600, fontFamily: F.body }}>{n.label}</span>
+            {isActive && <div style={{ position: "absolute", bottom: -4, width: 4, height: 4, borderRadius: "50%", background: C.gradient }} />}
           </button>
         );
       })}
