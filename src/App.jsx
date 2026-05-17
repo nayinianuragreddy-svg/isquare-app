@@ -15,6 +15,7 @@ import PostSuccess from "./screens/PostSuccess";
 import MyVoice from "./screens/MyVoice";
 import Notifications from "./screens/Notifications";
 import Profile from "./screens/Profile";
+import MapView from "./screens/MapView";
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -69,6 +70,9 @@ export default function App() {
           } />
           <Route path="/profile" element={
             <ProfileRequiredRoute><Profile /></ProfileRequiredRoute>
+          } />
+          <Route path="/map" element={
+            <ProfileRequiredRoute><MapView /></ProfileRequiredRoute>
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -3,6 +3,12 @@ import { createRoot } from "react-dom/client";
 import { AuthProvider } from "./context/AuthContext";
 import App from "./App";
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
 const root = createRoot(document.getElementById("root"));
 
 root.render(

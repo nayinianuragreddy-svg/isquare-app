@@ -34,6 +34,12 @@ export const STYLES = `
   @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
   @keyframes scaleIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes heatPulse { 0%, 100% { box-shadow: 0 0 12px rgba(240,68,56,0.35); } 50% { box-shadow: 0 0 28px rgba(240,68,56,0.6), 0 0 48px rgba(240,68,56,0.2); } }
+  @keyframes warmPulse { 0%, 100% { box-shadow: 0 0 10px rgba(255,176,32,0.3); } 50% { box-shadow: 0 0 22px rgba(255,176,32,0.5); } }
+  @keyframes risePulse { 0%, 100% { box-shadow: 0 0 8px rgba(120,86,255,0.25); } 50% { box-shadow: 0 0 16px rgba(120,86,255,0.45); } }
+  .heat-hot { animation: heatPulse 2s ease-in-out infinite; border-color: rgba(240,68,56,0.4) !important; }
+  .heat-warm { animation: warmPulse 2.5s ease-in-out infinite; border-color: rgba(255,176,32,0.4) !important; }
+  .heat-rising { animation: risePulse 3s ease-in-out infinite; border-color: rgba(120,86,255,0.4) !important; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: #050508; }
   .skeleton { background: linear-gradient(90deg, #14141B 0%, #1F1F2A 50%, #14141B 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }

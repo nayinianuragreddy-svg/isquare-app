@@ -7,6 +7,8 @@ import { Header, Avatar, StatusBadge, SeverityTag, I2Button, BottomSheet } from 
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
 
+const STATUS_STEPS = ["Open", "Pending", "In Progress", "Resolved"];
+
 export default function PostDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -19,6 +21,9 @@ export default function PostDetail() {
   const [supported, setSupported] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [similarPosts, setSimilarPosts] = useState([]);
+  const [mergeRequests, setMergeRequests] = useState([]);
+  const [mergesSent, setMergesSent] = useState({});
 
   useEffect(() => {
     if (!post) fetchPost();
@@ -27,10 +32,15 @@ export default function PostDetail() {
   }, [id]);
 
   useEffect(() => {
+    if (!post || !user) return;
+    fetchSimilar();
+    fetchMergeRequests();
+  }, [post?.cat, user?.id]);
+
+  useEffect(() => {
     const channel = supabase.channel("comments-" + id)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments", filter: `post_id=eq.${id}` }, () => {
-        loadComments();
-      }).subscribe();
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments", filter: `post_id=eq.${id}` }, () => loadComments())
+      .subscribe();
     return () => supabase.removeChannel(channel);
   }, [id]);
 
@@ -40,24 +50,40 @@ export default function PostDetail() {
       .select("*, profiles(name, username, verified)")
       .eq("id", id)
       .single();
-    if (data) {
-      setPost({
-        id: data.id,
-        cat: data.category,
-        severity: data.severity,
-        date: timeAgo(data.created_at),
-        fullDate: new Date(data.created_at).toLocaleDateString("en-IN"),
-        desc: data.description,
-        status: data.status,
-        agree: data.agree_count,
-        comments: data.comments_count,
-        author: data.anonymous ? "Anonymous" : (data.profiles?.name || "Citizen"),
-        handle: data.anonymous ? "anonymous" : (data.profiles?.username || "citizen"),
-        verified: !data.anonymous && !!data.profiles?.verified,
-        distance: "—",
-        photos: data.photos || [],
-      });
-    }
+    if (data) setPost({
+      id: data.id, cat: data.category, severity: data.severity,
+      date: timeAgo(data.created_at), fullDate: new Date(data.created_at).toLocaleDateString("en-IN"),
+      desc: data.description, status: data.status, agree: data.agree_count,
+      comments: data.comments_count,
+      author: data.anonymous ? "Anonymous" : (data.profiles?.name || "Citizen"),
+      handle: data.anonymous ? "anonymous" : (data.profiles?.username || "citizen"),
+      verified: !data.anonymous && !!data.profiles?.verified,
+      distance: "—", photos: data.photos || [], author_id: data.author_id,
+    });
+  };
+
+  const fetchSimilar = async () => {
+    if (!post?.cat || !user) return;
+    const { data } = await supabase
+      .from("posts")
+      .select("id, description, category, agree_count, profiles(name)")
+      .eq("category", post.cat)
+      .eq("type", "public")
+      .neq("id", id)
+      .neq("author_id", user.id)
+      .is("merged_into", null)
+      .limit(3);
+    setSimilarPosts(data || []);
+  };
+
+  const fetchMergeRequests = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("merge_requests")
+      .select("*, posts!requester_post_id(id, description, category, agree_count, profiles(name))")
+      .eq("target_post_id", id)
+      .eq("status", "pending");
+    setMergeRequests(data || []);
   };
 
   const loadComments = async () => {
@@ -104,22 +130,41 @@ export default function PostDetail() {
     setLoading(false);
   };
 
-  const sharePost = async () => {
-    const text = `i² · ${post?.cat} issue: ${post?.desc?.slice(0, 120)}...`;
-    try {
-      if (navigator.share) await navigator.share({ title: "i²", text });
-      else if (navigator.clipboard) await navigator.clipboard.writeText(text);
-    } catch {}
+  const requestMerge = async (targetId) => {
+    if (!user) return;
+    setMergesSent(p => ({ ...p, [targetId]: "sending" }));
+    await supabase.from("merge_requests").insert({ requester_post_id: id, target_post_id: targetId, requester_id: user.id });
+    setMergesSent(p => ({ ...p, [targetId]: "sent" }));
+  };
+
+  const handleMerge = async (req, accept) => {
+    if (!accept) {
+      await supabase.from("merge_requests").update({ status: "rejected" }).eq("id", req.id);
+      setMergeRequests(prev => prev.filter(r => r.id !== req.id));
+      return;
+    }
+    const reqPost = req.posts;
+    await supabase.from("posts").update({ merged_into: id, status: "Merged", agree_count: 0 }).eq("id", reqPost.id);
+    await supabase.from("posts").update({ agree_count: (post?.agree || 0) + (reqPost.agree_count || 0) }).eq("id", id);
+    await supabase.from("merge_requests").update({ status: "accepted" }).eq("id", req.id);
+    await supabase.from("notifications").insert({ user_id: req.requester_id, type: "merge_accepted", title: "Merge accepted! 🤝", body: `Your ${reqPost.category} post was merged. Combined voices are louder.`, post_id: id });
+    setPost(p => ({ ...p, agree: (p?.agree || 0) + (reqPost.agree_count || 0) }));
+    setMergeRequests(prev => prev.filter(r => r.id !== req.id));
+  };
+
+  const shareWhatsApp = () => {
+    const text = `🚨 Civic issue in your area!\n\n*${post?.cat}*: ${post?.desc?.slice(0, 160)}\n\n${post?.agree} people have spoken up. Join them on i² — Your Voice, Your City.\n${window.location.href}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   if (!post) return (
     <PhoneFrame>
       <Header title="" onBack={() => navigate("/feed")} />
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text2, fontSize: 14, fontFamily: F.body }}>
-        Loading...
-      </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.text2, fontSize: 14, fontFamily: F.body }}>Loading...</div>
     </PhoneFrame>
   );
+
+  const statusIdx = STATUS_STEPS.indexOf(post.status);
 
   return (
     <PhoneFrame>
@@ -128,6 +173,22 @@ export default function PostDetail() {
       } />
 
       <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* Merge requests (for post owner) */}
+        {mergeRequests.length > 0 && post.author_id === user?.id && mergeRequests.map(req => (
+          <div key={req.id} className="fade-in" style={{ margin: "12px 16px 0", padding: "14px", borderRadius: 14, background: `${C.purple}15`, border: `1px solid ${C.purple}40` }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.purple, marginBottom: 4, fontFamily: F.body }}>🤝 Merge Request</div>
+            <p style={{ margin: "0 0 10px", fontSize: 13, color: C.text2, fontFamily: F.body }}>
+              <strong style={{ color: C.text }}>{req.posts?.profiles?.name || "Someone"}</strong> wants to merge their {req.posts?.category} issue with yours. Combined i²: {(post.agree || 0) + (req.posts?.agree_count || 0)}
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: C.text, fontFamily: F.body, lineHeight: 1.4 }}>"{req.posts?.description?.slice(0, 100)}..."</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => handleMerge(req, false)} style={{ flex: 1, padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text2, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Reject</button>
+              <button onClick={() => handleMerge(req, true)} style={{ flex: 1, padding: "10px", borderRadius: 10, background: C.gradient, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Accept & Merge</button>
+            </div>
+          </div>
+        ))}
+
+        {/* Post content */}
         <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
             <Avatar name={post.author} size={48} />
@@ -166,12 +227,36 @@ export default function PostDetail() {
             <button onClick={() => document.getElementById("replies-section")?.scrollIntoView({ behavior: "smooth" })} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 12px", color: C.text2, cursor: "pointer", fontSize: 13, fontFamily: F.body, fontWeight: 600 }}>
               <Ics.Comment />{comments.length}
             </button>
-            <button onClick={sharePost} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 10px", color: C.text2, cursor: "pointer", fontFamily: F.body }}>
-              <Ics.Share />
+            <button onClick={shareWhatsApp} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 12px", color: C.green, cursor: "pointer", fontSize: 13, fontFamily: F.body, fontWeight: 700 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={C.green}><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.11.549 4.09 1.504 5.812L0 24l6.335-1.482A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.808 9.808 0 01-5.032-1.384l-.36-.214-3.732.873.936-3.617-.235-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+              Share
             </button>
           </div>
         </div>
 
+        {/* Status Timeline */}
+        <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text2, marginBottom: 14, fontFamily: F.body, textTransform: "uppercase", letterSpacing: 1 }}>Issue Status</div>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {STATUS_STEPS.map((step, i) => {
+              const done = i <= statusIdx;
+              const active = i === statusIdx;
+              return (
+                <div key={step} style={{ display: "flex", alignItems: "center", flex: i < STATUS_STEPS.length - 1 ? 1 : "none" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: active ? 14 : 12, height: active ? 14 : 12, borderRadius: "50%", background: done ? C.purple : C.surface3, border: `2px solid ${done ? C.purple : C.border}`, boxShadow: active ? `0 0 0 4px ${C.purple}25` : "none", transition: "all 0.3s" }} />
+                    <span style={{ fontSize: 10, fontWeight: done ? 700 : 400, color: done ? C.text : C.text3, fontFamily: F.body, whiteSpace: "nowrap" }}>{step}</span>
+                  </div>
+                  {i < STATUS_STEPS.length - 1 && (
+                    <div style={{ flex: 1, height: 2, background: i < statusIdx ? C.purple : C.surface3, marginBottom: 16, marginLeft: 4, marginRight: 4, transition: "background 0.3s" }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Comments */}
         <div id="replies-section" style={{ padding: "16px" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px", fontFamily: F.body }}>Replies ({comments.length})</h3>
 
@@ -183,9 +268,7 @@ export default function PostDetail() {
           </div>
 
           {comments.length === 0 && (
-            <div style={{ textAlign: "center", padding: "24px 0", color: C.text2, fontSize: 14, fontFamily: F.body }}>
-              No replies yet. Be the first to respond.
-            </div>
+            <div style={{ textAlign: "center", padding: "24px 0", color: C.text2, fontSize: 14, fontFamily: F.body }}>No replies yet. Be the first to respond.</div>
           )}
 
           {comments.map((c, i) => (
@@ -202,10 +285,36 @@ export default function PostDetail() {
             </div>
           ))}
         </div>
+
+        {/* Similar Issues / Merge */}
+        {similarPosts.length > 0 && (
+          <div style={{ padding: "16px", borderTop: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text2, marginBottom: 12, fontFamily: F.body, textTransform: "uppercase", letterSpacing: 1 }}>Similar Issues Nearby</div>
+            {similarPosts.map(s => {
+              const state = mergesSent[s.id];
+              return (
+                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontFamily: F.body, marginBottom: 2 }}>{s.profiles?.name || "Citizen"}</div>
+                    <div style={{ fontSize: 12, color: C.text2, fontFamily: F.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.description}</div>
+                    <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginTop: 2, fontFamily: F.body }}>{s.agree_count} i²</div>
+                  </div>
+                  <button
+                    onClick={() => state ? null : requestMerge(s.id)}
+                    disabled={!!state}
+                    style={{ padding: "8px 14px", borderRadius: 20, background: state === "sent" ? C.surface3 : C.purpleDim, border: `1px solid ${state === "sent" ? C.border : C.purple}`, color: state === "sent" ? C.text2 : C.purple, fontSize: 12, fontWeight: 700, cursor: state ? "default" : "pointer", fontFamily: F.body, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    {state === "sent" ? "Request sent ✓" : state === "sending" ? "..." : "Request Merge"}
+                  </button>
+                </div>
+              );
+            })}
+            <p style={{ fontSize: 12, color: C.text3, marginTop: 10, lineHeight: 1.5, fontFamily: F.body }}>Merging combines i² counts and makes your voices louder together.</p>
+          </div>
+        )}
       </div>
 
       <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)}>
-        {[{ label: "Share post", action: () => { setMenuOpen(false); sharePost(); } },
+        {[{ label: "Share on WhatsApp", action: () => { setMenuOpen(false); shareWhatsApp(); } },
           { label: "Copy link", action: async () => { setMenuOpen(false); try { await navigator.clipboard.writeText(window.location.href); } catch {} } },
           { label: "Report this post", action: () => { setMenuOpen(false); alert("Report submitted. Our team will review within 24 hours."); } },
           { label: "Cancel", action: () => setMenuOpen(false), muted: true }].map((item, i) => (

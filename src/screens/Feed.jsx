@@ -35,12 +35,15 @@ export default function Feed() {
 
   const { user } = useAuth();
 
+  const [newPostsCount, setNewPostsCount] = useState(0);
+
   const fetchPosts = useCallback(async () => {
     setPostsLoading(true);
     const { data } = await supabase
       .from("posts")
       .select("*, profiles(name, username, verified, residence)")
       .eq("type", "public")
+      .is("merged_into", null)
       .order("created_at", { ascending: false });
 
     const dbPosts = (data || []).map(p => ({
@@ -62,17 +65,18 @@ export default function Feed() {
       photos: p.photos || [],
     }));
 
-    const allPosts = dbPosts;
-    setPosts(allPosts);
+    setPosts(dbPosts);
     setPostsLoading(false);
+    setNewPostsCount(0);
   }, []);
 
   useEffect(() => {
     fetchPosts();
 
-    // Real-time subscription for new posts
     const channel = supabase.channel("posts-feed")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, () => fetchPosts())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts", filter: "type=eq.public" }, () => {
+        setNewPostsCount(n => n + 1);
+      })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "posts" }, () => fetchPosts())
       .subscribe();
 
@@ -142,12 +146,13 @@ export default function Feed() {
   const totalSignals = filteredPosts.reduce((s, p) => s + (p.agree || 0), 0);
   const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
 
-  const sharePost = async (post) => {
-    const text = `i² · ${post.cat} issue: ${post.desc?.slice(0, 120)}...`;
-    try {
-      if (navigator.share) await navigator.share({ title: "i² — Your Voice, Your City", text });
-      else if (navigator.clipboard) { await navigator.clipboard.writeText(text); }
-    } catch {}
+  const sharePost = (post) => {
+    const text = `🚨 Civic issue in your area!\n\n*${post.cat}*: ${post.desc?.slice(0, 160)}\n\n${post.agree} people have spoken up. Join them on i² — Your Voice, Your City.\n${window.location.origin}/post/${post.id}`;
+    if (navigator.share) {
+      navigator.share({ title: "i² — Civic Issue", text }).catch(() => {});
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    }
   };
 
   return (
@@ -206,6 +211,11 @@ export default function Feed() {
               )}
             </div>
 
+            {/* Map */}
+            <button onClick={() => navigate("/map")} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", color: C.text, cursor: "pointer" }}>
+              <Ics.Pin />
+            </button>
+
             {/* Notifications */}
             <button onClick={() => navigate("/notifications")} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", color: C.text, cursor: "pointer", position: "relative" }}>
               <Ics.Bell />
@@ -251,6 +261,13 @@ export default function Feed() {
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* New posts banner */}
+            {newPostsCount > 0 && (
+              <div onClick={fetchPosts} className="fade-in" style={{ margin: "8px 16px 0", padding: "10px 16px", borderRadius: 24, background: C.gradient, color: C.text, fontSize: 13, fontWeight: 700, textAlign: "center", cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.4)" }}>
+                ↑ {newPostsCount} new {newPostsCount === 1 ? "issue" : "issues"} — tap to load
               </div>
             )}
 
@@ -342,8 +359,17 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
     if (!supported) { setSparks(true); setTimeout(() => setSparks(false), 600); }
     onSupport();
   };
+  const heatClass = p.agree >= 50 ? "heat-hot" : p.agree >= 25 ? "heat-warm" : p.agree >= 10 ? "heat-rising" : "";
+  const heatIcon = p.agree >= 50 ? "🔥" : p.agree >= 25 ? "⚡" : p.agree >= 10 ? "📈" : null;
+
+  const shareWhatsApp = (e) => {
+    e.stopPropagation();
+    const text = `🚨 Civic issue in your area!\n\n*${p.cat}*: ${p.desc?.slice(0, 160)}\n\n${p.agree} people have spoken up. Join them on i².\n${window.location.origin}/post/${p.id}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
   return (
-    <article onClick={onClick} style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", display: "flex", gap: 12, position: "relative" }}>
+    <article onClick={onClick} className={heatClass} style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", display: "flex", gap: 12, position: "relative", transition: "border-color 0.3s" }}>
       <Avatar name={p.author} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
@@ -369,18 +395,20 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
         )}
         <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ position: "relative" }}>
-            <I2Button active={supported} count={p.agree + (supported ? 1 : 0)} onClick={handleSupport} />
+            <I2Button active={supported} count={p.agree} onClick={handleSupport} />
             {sparks && [0, 1, 2].map(i => (
               <div key={i} style={{ position: "absolute", top: 0, left: 12 + i * 8, pointerEvents: "none", color: i === 0 ? C.purple : i === 1 ? C.accent : C.amber, animation: `sparkle 0.6s ease-out ${i * 0.1}s forwards` }}>
                 <Ics.Spark size={10 + i * 2} />
               </div>
             ))}
           </div>
+          {heatIcon && <span style={{ fontSize: 14 }}>{heatIcon}</span>}
           <button onClick={e => { e.stopPropagation(); }} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 12px", color: C.text2, cursor: "pointer", fontSize: 13, fontFamily: F.body, fontWeight: 600 }}>
             <Ics.Comment />{p.comments}
           </button>
-          <button onClick={e => { e.stopPropagation(); onShare(); }} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 10px", color: C.text2, cursor: "pointer", fontFamily: F.body }}>
-            <Ics.Share />
+          <button onClick={shareWhatsApp} style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 10px", color: C.green, cursor: "pointer", fontFamily: F.body, fontWeight: 700, fontSize: 13 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={C.green}><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.11.549 4.09 1.504 5.812L0 24l6.335-1.482A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.808 9.808 0 01-5.032-1.384l-.36-.214-3.732.873.936-3.617-.235-.374A9.818 9.818 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+            Share
           </button>
         </div>
       </div>

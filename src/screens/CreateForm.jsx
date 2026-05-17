@@ -23,6 +23,8 @@ export default function CreateForm() {
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const canSubmit = form.desc.trim() && form.area.trim() && form.cat;
@@ -53,6 +55,16 @@ export default function CreateForm() {
 
   const removePhoto = (idx) => setPhotos(prev => prev.filter((_, i) => i !== idx));
 
+  const getLocation = () => {
+    if (!navigator.geolocation) return;
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsLoading(false); },
+      () => setGpsLoading(false),
+      { timeout: 8000 }
+    );
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit || !user) return;
     setLoading(true);
@@ -72,6 +84,7 @@ export default function CreateForm() {
         agree_count: 0,
         comments_count: 0,
         photos,
+        ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
       });
       navigate("/post-success", { state: { type: postType } });
     } catch (e) {
@@ -94,7 +107,12 @@ export default function CreateForm() {
         <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>What's happening? *</label>
         <textarea placeholder="Describe the issue clearly. More detail = faster action." value={form.desc} onChange={e => set("desc", e.target.value)} style={{ width: "100%", padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 100, resize: "none", marginBottom: 20, boxSizing: "border-box", fontFamily: F.body }} />
 
-        <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} right={<Ics.Pin />} />
+        <div style={{ position: "relative" }}>
+          <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} right={<Ics.Pin />} />
+          <button onClick={getLocation} type="button" style={{ position: "absolute", right: 42, top: 36, background: "none", border: "none", padding: "4px 8px", cursor: "pointer", fontSize: 11, color: coords ? C.green : C.purple, fontWeight: 700, fontFamily: F.body }}>
+            {gpsLoading ? "..." : coords ? "✓ GPS" : "Use GPS"}
+          </button>
+        </div>
 
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Category *</label>
