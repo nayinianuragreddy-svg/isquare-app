@@ -6,6 +6,7 @@ import { Btn, Input, Header } from "../../components/shared";
 import { Ics } from "../../components/icons";
 import { C, F } from "../../constants/theme";
 import { supabase } from "../../lib/supabase";
+import { toast } from "../../lib/toast";
 
 export default function Registration() {
   const navigate = useNavigate();
@@ -51,7 +52,8 @@ export default function Registration() {
       });
       navigate("/success");
     } catch (e) {
-      console.error(e);
+      console.error("Profile save error:", e);
+      toast(e?.message || "Could not create account. Try again.", "error");
     } finally {
       setLoading(false);
     }

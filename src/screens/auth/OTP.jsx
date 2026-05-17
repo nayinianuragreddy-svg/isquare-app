@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { supabase } from "../../lib/supabase";
 import PhoneFrame from "../../components/PhoneFrame";
 import { Btn, Header } from "../../components/shared";
 import { C, F } from "../../constants/theme";
@@ -36,8 +37,15 @@ export default function OTP() {
     setLoading(true);
     try {
       await signIn();
-      if (profile?.name) {
-        navigate("/feed");
+      // After signIn, fetch profile fresh from DB to decide routing
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: prof } = await supabase.from("profiles").select("name").eq("id", session.user.id).maybeSingle();
+        if (prof?.name) {
+          navigate("/feed");
+        } else {
+          navigate("/register", { state: { phone } });
+        }
       } else {
         navigate("/register", { state: { phone } });
       }
