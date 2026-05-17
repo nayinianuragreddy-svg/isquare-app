@@ -6,7 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Avatar, StatusBadge, SeverityTag, I2Button, PostCardSkeleton, BottomSheet } from "../components/shared";
 import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
-import { MOCK_POSTS, MOCK_REP_POSTS } from "../data/mockData";
+import { MOCK_REP_POSTS } from "../data/mockData";
 
 const LOCATIONS = [
   { id: "saraswathi", name: "Saraswathi Colony", full: "Saraswathi Colony, Uppal, Hyderabad" },
@@ -31,7 +31,7 @@ export default function Feed() {
   const [postsLoading, setPostsLoading] = useState(true);
   const [supportedPosts, setSupportedPosts] = useState({});
   const [pollVotes, setPollVotes] = useState({});
-  const [unreadCount, setUnreadCount] = useState(3);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const { user } = useAuth();
 
@@ -59,10 +59,10 @@ export default function Feed() {
       handle: p.anonymous ? "anonymous" : (p.profiles?.username || "citizen"),
       verified: !p.anonymous && p.profiles?.verified,
       distance: "0.5 km",
-      img: p.image_url,
+      photos: p.photos || [],
     }));
 
-    const allPosts = [...dbPosts, ...MOCK_POSTS];
+    const allPosts = dbPosts;
     setPosts(allPosts);
     setPostsLoading(false);
   }, []);
@@ -78,6 +78,18 @@ export default function Feed() {
 
     return () => supabase.removeChannel(channel);
   }, [fetchPosts]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false).then(({ count }) => setUnreadCount(count || 0));
+
+    const channel = supabase.channel("notif-count-" + user.id)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => {
+        setUnreadCount(n => n + 1);
+      }).subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -125,7 +137,7 @@ export default function Feed() {
   const filteredReps = MOCK_REP_POSTS.filter(f => f.locId === activeLocId);
   const areaStats = {
     open: filteredPosts.filter(p => p.status === "Open" || p.status === "Pending").length,
-    resolved: filteredPosts.filter(p => p.status === "Resolved").length + 3,
+    resolved: filteredPosts.filter(p => p.status === "Resolved").length,
   };
   const totalSignals = filteredPosts.reduce((s, p) => s + (p.agree || 0), 0);
   const fmt = n => n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
@@ -350,9 +362,9 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
           <StatusBadge status={p.status} />
         </div>
         <p style={{ margin: "0 0 12px", fontSize: 15, lineHeight: 1.5, color: C.text, fontFamily: F.body }}>{p.desc}</p>
-        {p.img && (
+        {p.photos?.[0] && (
           <div style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 12, border: `1px solid ${C.border}` }}>
-            <img src={p.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={p.photos[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
         )}
         <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8, alignItems: "center" }}>

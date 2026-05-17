@@ -79,11 +79,6 @@ export default function OTP() {
 
         {error && <div style={{ color: C.red, fontSize: 13, textAlign: "center", marginBottom: 16, fontFamily: F.body }}>{error}</div>}
 
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <span style={{ color: C.text2, fontSize: 13, fontFamily: F.body }}>Demo OTP: </span>
-          <span style={{ color: C.purple, fontSize: 13, fontWeight: 700, fontFamily: F.body }}>12345</span>
-        </div>
-
         <Btn onClick={() => verify(otp)} disabled={otp.length < 5} loading={loading}>
           Verify
         </Btn>

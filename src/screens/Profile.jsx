@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
 import { Header, Btn, Input, BottomSheet } from "../components/shared";
@@ -14,6 +15,25 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: profile?.name || "", username: profile?.username || "", residence: profile?.residence || "" });
   const [saving, setSaving] = useState(false);
+  const [stats, setStats] = useState({ raised: 0, resolved: 0, isquared: 0 });
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const fetchStats = async () => {
+      const { data } = await supabase
+        .from("posts")
+        .select("status, agree_count")
+        .eq("author_id", profile.id);
+      if (data) {
+        setStats({
+          raised: data.length,
+          resolved: data.filter(p => p.status === "Resolved").length,
+          isquared: data.reduce((sum, p) => sum + (p.agree_count || 0), 0),
+        });
+      }
+    };
+    fetchStats();
+  }, [profile?.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -69,7 +89,7 @@ export default function Profile() {
 
         {/* Stats */}
         <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-          {[{ val: "7", label: "Issues raised", color: C.text }, { val: "3", label: "Resolved", color: C.green }, { val: "459", label: "i² received", color: C.purple }].map((s, i) => (
+          {[{ val: stats.raised, label: "Issues raised", color: C.text }, { val: stats.resolved, label: "Resolved", color: C.green }, { val: stats.isquared, label: "i² received", color: C.purple }].map((s, i) => (
             <div key={i} style={{ flex: 1, padding: "14px 10px", background: C.surface2, borderRadius: 12, border: `1px solid ${C.border}`, textAlign: "center" }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: F.body }}>{s.val}</div>
               <div style={{ fontSize: 11, color: C.text2, marginTop: 2, fontFamily: F.body }}>{s.label}</div>

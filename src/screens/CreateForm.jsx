@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -14,12 +14,15 @@ export default function CreateForm() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const postType = location.state?.type || "public";
+  const fileInputRef = useRef(null);
 
   const [form, setForm] = useState({ desc: "", area: "", cat: "" });
   const [anonymous, setAnonymous] = useState(false);
   const [sendTo, setSendTo] = useState("MLA");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const canSubmit = form.desc.trim() && form.area.trim() && form.cat;
@@ -28,6 +31,27 @@ export default function CreateForm() {
     if (form.desc.trim() || form.area.trim()) setConfirmDiscard(true);
     else navigate("/feed");
   };
+
+  const handlePhotoSelect = async (e) => {
+    const files = Array.from(e.target.files).slice(0, 3 - photos.length);
+    if (!files.length || !user) return;
+    setUploading(true);
+    const urls = [];
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const path = `${user.id}/${Date.now()}-${safeName}`;
+      const { error } = await supabase.storage.from("post-images").upload(path, file, { upsert: false });
+      if (!error) {
+        const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+        urls.push(data.publicUrl);
+      }
+    }
+    setPhotos(prev => [...prev, ...urls].slice(0, 3));
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const removePhoto = (idx) => setPhotos(prev => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async () => {
     if (!canSubmit || !user) return;
@@ -47,6 +71,7 @@ export default function CreateForm() {
         routed_to: postType === "private" ? `${sendTo} Office` : null,
         agree_count: 0,
         comments_count: 0,
+        photos,
       });
       navigate("/post-success", { state: { type: postType } });
     } catch (e) {
@@ -61,19 +86,16 @@ export default function CreateForm() {
       <Header title={postType === "public" ? "Speak Up" : "Personal Request"} onBack={handleBack} />
       <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto" }}>
 
-        {/* Context banner */}
         <div style={{ color: postType === "public" ? C.purple : C.accent, fontSize: 13, display: "flex", alignItems: "center", gap: 8, marginBottom: 20, padding: "10px 12px", background: postType === "public" ? C.purpleDim : "rgba(29,155,240,0.15)", borderRadius: 10, border: `1px solid ${postType === "public" ? C.purple : C.accent}40`, fontFamily: F.body }}>
           <Ics.Info />
           <span style={{ fontWeight: 600 }}>{postType === "public" ? "Visible to everyone in your area" : "Private — only your representative sees this"}</span>
         </div>
 
-        {/* Description */}
         <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>What's happening? *</label>
         <textarea placeholder="Describe the issue clearly. More detail = faster action." value={form.desc} onChange={e => set("desc", e.target.value)} style={{ width: "100%", padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 100, resize: "none", marginBottom: 20, boxSizing: "border-box", fontFamily: F.body }} />
 
         <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} right={<Ics.Pin />} />
 
-        {/* Category */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Category *</label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -84,12 +106,29 @@ export default function CreateForm() {
         </div>
 
         {/* Photo upload */}
-        <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Add Photos <span style={{ color: C.text2, fontWeight: 400 }}>(optional)</span></label>
-        <div style={{ display: "flex", gap: 10, overflowX: "auto", marginBottom: 20, paddingBottom: 4 }}>
-          <div style={{ width: 80, height: 80, border: `1.5px dashed ${C.border}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: C.text2, flexShrink: 0, cursor: "pointer", background: C.surface2 }}>
-            <Ics.Camera />
-            <span style={{ fontSize: 11, marginTop: 4, fontFamily: F.body }}>Add</span>
-          </div>
+        <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>
+          Add Photos <span style={{ color: C.text2, fontWeight: 400 }}>(optional · up to 3)</span>
+        </label>
+        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+          {photos.map((url, i) => (
+            <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0 }}>
+              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>×</button>
+            </div>
+          ))}
+          {photos.length < 3 && (
+            <div onClick={() => fileInputRef.current?.click()} style={{ width: 80, height: 80, border: `1.5px dashed ${uploading ? C.purple : C.border}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: uploading ? C.purple : C.text2, cursor: "pointer", background: C.surface2, transition: "all 0.2s" }}>
+              {uploading ? (
+                <div style={{ width: 20, height: 20, border: `2px solid ${C.purple}`, borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              ) : (
+                <>
+                  <Ics.Camera />
+                  <span style={{ fontSize: 11, marginTop: 4, fontFamily: F.body }}>Add</span>
+                </>
+              )}
+            </div>
+          )}
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
         </div>
 
         {postType === "public" ? (
@@ -110,13 +149,12 @@ export default function CreateForm() {
           </div>
         )}
 
-        <Btn disabled={!canSubmit} loading={loading} onClick={handleSubmit}>
+        <Btn disabled={!canSubmit || uploading} loading={loading} onClick={handleSubmit}>
           {postType === "public" ? "Speak Up" : "Send Request"}
         </Btn>
         <div style={{ height: 20 }} />
       </div>
 
-      {/* Discard dialog */}
       {confirmDiscard && (
         <div onClick={() => setConfirmDiscard(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s", padding: "0 24px" }}>
           <div onClick={e => e.stopPropagation()} className="scale-in" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px", width: "100%", maxWidth: 320 }}>
