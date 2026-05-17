@@ -12,7 +12,7 @@ export default function OTP() {
   const refs = [useRef(), useRef(), useRef(), useRef(), useRef()];
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile } = useAuth();
+  const { profile, signIn } = useAuth();
   const phone = location.state?.phone || "+91 XXXXXXXXXX";
 
   useEffect(() => { refs[0].current?.focus(); }, []);
@@ -34,12 +34,19 @@ export default function OTP() {
   const verify = async (code) => {
     if (code !== "12345") { setError("Incorrect OTP. Try 12345."); return; }
     setLoading(true);
-    if (profile?.name) {
-      navigate("/feed");
-    } else {
-      navigate("/register", { state: { phone } });
+    try {
+      await signIn();
+      if (profile?.name) {
+        navigate("/feed");
+      } else {
+        navigate("/register", { state: { phone } });
+      }
+    } catch (e) {
+      setError("Could not connect. Check your internet and try again.");
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const otp = digits.join("");

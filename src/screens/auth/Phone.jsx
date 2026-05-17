@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import PhoneFrame from "../../components/PhoneFrame";
 import { Btn } from "../../components/shared";
 import { I2Logo } from "../../components/icons";
@@ -8,21 +7,11 @@ import { C, F } from "../../constants/theme";
 
 export default function Phone() {
   const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn } = useAuth();
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (phone.length < 10) return;
-    setLoading(true);
-    try {
-      await signIn();
-      navigate("/otp", { state: { phone: "+91 " + phone } });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    navigate("/otp", { state: { phone: "+91 " + phone } });
   };
 
   return (
@@ -50,7 +39,7 @@ export default function Phone() {
           />
         </div>
 
-        <Btn onClick={handleSend} disabled={phone.length < 10} loading={loading}>
+        <Btn onClick={handleSend} disabled={phone.length < 10}>
           Send OTP
         </Btn>
 
