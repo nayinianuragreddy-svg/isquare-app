@@ -12,7 +12,6 @@ export default function Profile() {
   const navigate = useNavigate();
   const { profile, signOut, saveProfile } = useAuth();
   const [settingsSheet, setSettingsSheet] = useState(null);
-  const [darkTheme, setDarkTheme] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: profile?.name || "", username: profile?.username || "", residence: profile?.residence || "" });
   const [saving, setSaving] = useState(false);
@@ -65,7 +64,7 @@ export default function Profile() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 17, fontWeight: 800, fontFamily: F.body }}>{profile?.name || "Citizen"}</span>
-                <Ics.Badge />
+                {profile?.verified && <Ics.Badge />}
               </div>
               <div style={{ color: C.text2, fontSize: 13, fontFamily: F.body }}>@{profile?.username || "citizen"}</div>
               <div style={{ color: C.text2, fontSize: 12, marginTop: 2, fontFamily: F.body }}>{profile?.phone || ""}</div>
@@ -99,20 +98,24 @@ export default function Profile() {
           ))}
         </div>
 
-        {/* Verification warning */}
-        <div style={{ background: `${C.amber}15`, border: `1px solid ${C.amber}40`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 24, cursor: "pointer" }}>
-          <Ics.Warning />
-          <span style={{ color: C.amber, fontSize: 13, flex: 1, fontFamily: F.body }}>Please reupload ID Proof for verification</span>
-          <div style={{ color: C.amber }}><Ics.ChevRight /></div>
-        </div>
+        {/* Verification status */}
+        {profile?.verified ? (
+          <div style={{ background: `${C.green}15`, border: `1px solid ${C.green}40`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>
+            <span style={{ color: C.green, fontSize: 13, flex: 1, fontFamily: F.body, fontWeight: 600 }}>Verified citizen</span>
+          </div>
+        ) : (
+          <div style={{ background: `${C.amber}12`, border: `1px solid ${C.amber}30`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+            <Ics.Info />
+            <span style={{ color: C.amber, fontSize: 13, flex: 1, fontFamily: F.body }}>Verification pending — your identity will be reviewed</span>
+          </div>
+        )}
 
         {/* Settings list */}
         {[
-          { icon: Ics.Moon, text: "Dark Theme", toggle: true, action: () => setDarkTheme(!darkTheme), toggleOn: darkTheme },
           { icon: Ics.Info, text: "About i²", action: () => setSettingsSheet("about") },
           { icon: Ics.File, text: "Terms & Privacy", action: () => setSettingsSheet("terms") },
           { icon: Ics.Shield, text: "Security", action: () => setSettingsSheet("security") },
-          { icon: Ics.Trash, text: "Delete Account", red: true, action: () => setSettingsSheet("delete") },
           { icon: Ics.Logout, text: "Logout", red: true, action: handleLogout },
         ].map((item, i, arr) => (
           <div key={i} onClick={item.action} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}>
@@ -120,13 +123,7 @@ export default function Profile() {
               <div style={{ color: item.red ? C.red : C.text2 }}><item.icon /></div>
               {item.text}
             </div>
-            {item.toggle ? (
-              <div style={{ width: 44, height: 24, background: item.toggleOn ? C.purple : C.surface3, borderRadius: 12, position: "relative", transition: "background 0.2s" }}>
-                <div style={{ width: 20, height: 20, background: "#fff", borderRadius: "50%", position: "absolute", top: 2, right: item.toggleOn ? 2 : "auto", left: item.toggleOn ? "auto" : 2, transition: "all 0.2s" }} />
-              </div>
-            ) : (
-              <div style={{ color: C.text2 }}><Ics.ChevRight /></div>
-            )}
+            <div style={{ color: C.text2 }}><Ics.ChevRight /></div>
           </div>
         ))}
       </div>
@@ -155,24 +152,15 @@ export default function Profile() {
         {settingsSheet === "security" && (
           <>
             <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 12px", fontFamily: F.body }}>Security</h3>
-            {[{ label: "Two-factor authentication", value: "Off" }, { label: "Login alerts", value: "On" }, { label: "Active sessions", value: "1 device" }, { label: "Last login", value: "Today, 9:41 AM" }].map((row, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: i < 3 ? `1px solid ${C.border}` : "none" }}>
+            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>Your account uses anonymous authentication. Your data is stored securely on encrypted servers.</p>
+            {[{ label: "Authentication", value: "Anonymous" }, { label: "Data encryption", value: "AES-256" }, { label: "Active sessions", value: "This device" }].map((row, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: i < 2 ? `1px solid ${C.border}` : "none" }}>
                 <span style={{ fontSize: 14, fontFamily: F.body }}>{row.label}</span>
                 <span style={{ fontSize: 14, color: C.text2, fontFamily: F.body }}>{row.value}</span>
               </div>
             ))}
             <div style={{ height: 20 }} />
             <Btn onClick={() => setSettingsSheet(null)}>Close</Btn>
-          </>
-        )}
-        {settingsSheet === "delete" && (
-          <>
-            <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 12px", color: C.red, fontFamily: F.body }}>Delete Account?</h3>
-            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>This will permanently remove your profile, all issues you've raised, and all support you've given. This action cannot be undone.</p>
-            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-              <button onClick={() => setSettingsSheet(null)} style={{ flex: 1, padding: "14px", borderRadius: 12, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Cancel</button>
-              <button onClick={() => { setSettingsSheet(null); handleLogout(); }} style={{ flex: 1, padding: "14px", borderRadius: 12, background: C.red, border: "none", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Delete</button>
-            </div>
           </>
         )}
       </BottomSheet>

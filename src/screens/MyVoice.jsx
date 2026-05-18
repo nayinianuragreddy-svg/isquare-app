@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -6,6 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { StatusBadge, SeverityTag, I2Button, PostCardSkeleton } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { toast } from "../lib/toast";
 
 export default function MyVoice() {
   const navigate = useNavigate();
@@ -14,12 +15,12 @@ export default function MyVoice() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [myPosts, setMyPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const scrollRef = useRef(null);
+  const touchStartY = useRef(0);
+  const [pullDist, setPullDist] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchMyPosts();
-  }, [user]);
-
-  const fetchMyPosts = async () => {
+  const fetchMyPosts = useCallback(async () => {
     if (!user) { setLoading(false); return; }
     const { data } = await supabase.from("posts").select("*").eq("author_id", user.id).order("created_at", { ascending: false });
     const mapped = (data || []).map(p => ({
@@ -29,7 +30,11 @@ export default function MyVoice() {
     }));
     setMyPosts(mapped);
     setLoading(false);
-  };
+  }, [user]);
+
+  useEffect(() => {
+    fetchMyPosts();
+  }, [fetchMyPosts]);
 
   const typePosts = myPosts.filter(p => filter === "Public" ? p.type === "Public" : p.type === "Private");
   const filtered = typePosts.filter(p => statusFilter === "All" || p.status === statusFilter);
@@ -60,7 +65,15 @@ export default function MyVoice() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overscrollBehavior: "none" }}
+        onTouchStart={e => { if (scrollRef.current?.scrollTop === 0) touchStartY.current = e.touches[0].clientY; }}
+        onTouchMove={e => { if (!touchStartY.current) return; const d = e.touches[0].clientY - touchStartY.current; if (d > 0 && scrollRef.current?.scrollTop === 0) setPullDist(Math.min(d * 0.35, 70)); }}
+        onTouchEnd={() => { if (pullDist > 45 && !refreshing) { setRefreshing(true); fetchMyPosts().then(() => { setRefreshing(false); toast("Refreshed"); }); } setPullDist(0); touchStartY.current = 0; }}>
+        {(pullDist > 0 || refreshing) && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: refreshing ? 50 : pullDist, overflow: "hidden", transition: pullDist > 0 ? "none" : "height 0.3s" }}>
+            <div style={{ width: 24, height: 24, border: `2px solid ${C.purple}`, borderTop: `2px solid transparent`, borderRadius: "50%", animation: refreshing ? "pullSpin 0.6s linear infinite" : "none", transform: !refreshing ? `rotate(${pullDist * 4}deg)` : undefined, opacity: Math.min(pullDist / 50, 1) }} />
+          </div>
+        )}
         {loading ? (
           Array(3).fill(0).map((_, i) => <PostCardSkeleton key={i} />)
         ) : filtered.length === 0 ? (
@@ -79,7 +92,7 @@ export default function MyVoice() {
             <button onClick={() => navigate("/create", { state: { type: filter === "Public" ? "public" : "private" } })} style={{ padding: "12px 28px", borderRadius: 24, background: C.gradient, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.3)" }}>{filter === "Public" ? "Speak Up" : "Send Request"}</button>
           </div>
         ) : filtered.map((t, i) => (
-          <article key={t.id || i} style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12 }}>
+          <article key={t.id || i} onClick={() => navigate("/post/" + t.id)} style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, cursor: "pointer" }}>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: C.surface3, display: "flex", alignItems: "center", justifyContent: "center", color: C.text2, flexShrink: 0 }}>
               {t.type === "Public" ? <Ics.SpeakUp /> : <Ics.Rep />}
             </div>

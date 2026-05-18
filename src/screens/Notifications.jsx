@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
 import { Header } from "../components/shared";
 import { C, F } from "../constants/theme";
+import { toast } from "../lib/toast";
 
 const TYPE_ICON = { vote: "🔥", comment: "💬", status_change: "✅", default: "📢" };
 
@@ -13,6 +14,10 @@ export default function Notifications() {
   const { user } = useAuth();
   const [notifs, setNotifs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const scrollRef = useRef(null);
+  const touchStartY = useRef(0);
+  const [pullDist, setPullDist] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -54,7 +59,15 @@ export default function Notifications() {
   return (
     <PhoneFrame>
       <Header title="Notifications" onBack={() => navigate("/feed")} />
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overscrollBehavior: "none" }}
+        onTouchStart={e => { if (scrollRef.current?.scrollTop === 0) touchStartY.current = e.touches[0].clientY; }}
+        onTouchMove={e => { if (!touchStartY.current) return; const d = e.touches[0].clientY - touchStartY.current; if (d > 0 && scrollRef.current?.scrollTop === 0) setPullDist(Math.min(d * 0.35, 70)); }}
+        onTouchEnd={() => { if (pullDist > 45 && !refreshing) { setRefreshing(true); fetchNotifs().then(() => { setRefreshing(false); toast("Refreshed"); }); } setPullDist(0); touchStartY.current = 0; }}>
+        {(pullDist > 0 || refreshing) && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: refreshing ? 50 : pullDist, overflow: "hidden", transition: pullDist > 0 ? "none" : "height 0.3s" }}>
+            <div style={{ width: 24, height: 24, border: `2px solid ${C.purple}`, borderTop: `2px solid transparent`, borderRadius: "50%", animation: refreshing ? "pullSpin 0.6s linear infinite" : "none", transform: !refreshing ? `rotate(${pullDist * 4}deg)` : undefined, opacity: Math.min(pullDist / 50, 1) }} />
+          </div>
+        )}
         {loading ? (
           Array(4).fill(0).map((_, i) => (
             <div key={i} style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${C.border}` }}>
@@ -67,9 +80,13 @@ export default function Notifications() {
           ))
         ) : notifs.length === 0 ? (
           <div style={{ padding: "60px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🔔</div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, fontFamily: F.body }}>No notifications yet</div>
-            <div style={{ color: C.text2, fontSize: 14, fontFamily: F.body }}>When others support or comment on your posts, you'll see it here.</div>
+            <div style={{ position: "relative", display: "inline-block", marginBottom: 20 }}>
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}20, ${C.accent}10)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", animation: "pulse1 3s ease-in-out infinite" }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+              </div>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>All quiet here</div>
+            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, maxWidth: 260, margin: "0 auto" }}>When someone supports or replies to your issues, you'll be notified here.</div>
           </div>
         ) : (
           <>

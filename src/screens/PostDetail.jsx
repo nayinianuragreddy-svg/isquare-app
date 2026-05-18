@@ -26,6 +26,9 @@ export default function PostDetail() {
   const [mergeRequests, setMergeRequests] = useState([]);
   const [mergesSent, setMergesSent] = useState({});
   const [lightboxSrc, setLightboxSrc] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editDesc, setEditDesc] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!post) fetchPost();
@@ -60,7 +63,7 @@ export default function PostDetail() {
       author: data.anonymous ? "Anonymous" : (data.profiles?.name || "Citizen"),
       handle: data.anonymous ? "anonymous" : (data.profiles?.username || "citizen"),
       verified: !data.anonymous && !!data.profiles?.verified,
-      distance: "—", photos: data.photos || [], author_id: data.author_id,
+      area: data.area || "", photos: data.photos || [], author_id: data.author_id,
     });
   };
 
@@ -164,6 +167,22 @@ export default function PostDetail() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
+  const isOwner = post?.author_id === user?.id;
+
+  const handleEdit = async () => {
+    if (!editDesc.trim()) return;
+    await supabase.from("posts").update({ description: editDesc.trim() }).eq("id", id);
+    setPost(p => ({ ...p, desc: editDesc.trim() }));
+    setEditMode(false);
+    toast("Post updated");
+  };
+
+  const handleDelete = async () => {
+    await supabase.from("posts").delete().eq("id", id);
+    toast("Post deleted");
+    navigate("/feed");
+  };
+
   if (!post) return (
     <PhoneFrame>
       <Header title="" onBack={() => navigate("/feed")} />
@@ -229,7 +248,7 @@ export default function PostDetail() {
               </div>
               <div style={{ fontSize: 13, color: C.text2, fontFamily: F.body }}>@{post.handle}</div>
               <div style={{ display: "flex", gap: 8, fontSize: 12, color: C.text2, marginTop: 2, alignItems: "center", fontFamily: F.body }}>
-                <Ics.Pin /> <span>{post.distance}</span> · <span>{post.fullDate}</span>
+                <Ics.Pin /> <span>{post.area || "Nearby"}</span> · <span>{post.fullDate}</span>
               </div>
             </div>
           </div>
@@ -240,7 +259,17 @@ export default function PostDetail() {
             <StatusBadge status={post.status} />
           </div>
 
-          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 14px", fontFamily: F.body }}>{post.desc}</p>
+          {editMode ? (
+            <div style={{ marginBottom: 14 }}>
+              <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} style={{ width: "100%", padding: "12px", background: C.surface2, border: `1px solid ${C.purple}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 80, resize: "none", boxSizing: "border-box", fontFamily: F.body }} />
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button onClick={() => setEditMode(false)} style={{ flex: 1, padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text2, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Cancel</button>
+                <button onClick={handleEdit} style={{ flex: 1, padding: "10px", borderRadius: 10, background: C.gradient, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Save</button>
+              </div>
+            </div>
+          ) : (
+            <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 14px", fontFamily: F.body }}>{post.desc}</p>
+          )}
 
           {post.photos?.length > 0 && (
             <div style={{ display: "flex", gap: 8, overflowX: "auto", marginBottom: 14 }}>
@@ -346,15 +375,33 @@ export default function PostDetail() {
       <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)}>
         {[{ label: "Share on WhatsApp", action: () => { setMenuOpen(false); shareWhatsApp(); } },
           { label: "Copy link", action: async () => { setMenuOpen(false); try { await navigator.clipboard.writeText(window.location.href); toast("Link copied"); } catch {} } },
-          { label: "Report this post", action: () => { setMenuOpen(false); toast("Report submitted", "info"); } },
+          ...(isOwner ? [
+            { label: "Edit post", action: () => { setMenuOpen(false); setEditDesc(post.desc); setEditMode(true); } },
+            { label: "Delete post", action: () => { setMenuOpen(false); setDeleteConfirm(true); }, red: true },
+          ] : [
+            { label: "Report this post", action: () => { setMenuOpen(false); toast("Report submitted", "info"); } },
+          ]),
           { label: "Cancel", action: () => setMenuOpen(false), muted: true }].map((item, i) => (
-          <button key={i} onClick={item.action} style={{ width: "100%", padding: "14px 0", background: "none", border: "none", color: item.muted ? C.text2 : C.text, fontSize: 15, fontWeight: 600, textAlign: "left", cursor: "pointer", borderTop: i === 0 ? "none" : `1px solid ${C.border}`, fontFamily: F.body }}>
+          <button key={i} onClick={item.action} style={{ width: "100%", padding: "14px 0", background: "none", border: "none", color: item.red ? C.red : item.muted ? C.text2 : C.text, fontSize: 15, fontWeight: 600, textAlign: "left", cursor: "pointer", borderTop: i === 0 ? "none" : `1px solid ${C.border}`, fontFamily: F.body }}>
             {item.label}
           </button>
         ))}
       </BottomSheet>
 
       <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
+
+      {deleteConfirm && (
+        <div onClick={() => setDeleteConfirm(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s", padding: "0 24px" }}>
+          <div onClick={e => e.stopPropagation()} className="scale-in" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px", width: "100%", maxWidth: 320 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, fontFamily: F.body, color: C.red }}>Delete this post?</div>
+            <div style={{ fontSize: 14, color: C.text2, marginBottom: 20, lineHeight: 1.5, fontFamily: F.body }}>This will permanently remove the post, all votes, and comments. This cannot be undone.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setDeleteConfirm(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Cancel</button>
+              <button onClick={handleDelete} style={{ flex: 1, padding: "12px", borderRadius: 10, background: C.red, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </PhoneFrame>
   );
 }

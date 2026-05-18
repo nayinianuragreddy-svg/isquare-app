@@ -6,8 +6,14 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Header, Btn, Input } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { toast } from "../lib/toast";
 
 const CATEGORIES = ["Water", "Road", "Electricity", "Sanitation", "Traffic", "Infrastructure", "Other"];
+const SEVERITIES = [
+  { id: "Critical", label: "Critical", desc: "Danger to life or safety", color: "#F04438" },
+  { id: "High", label: "High", desc: "Urgent, needs quick action", color: "#FFB020" },
+  { id: "Routine", label: "Routine", desc: "Important but not urgent", color: "#8E8E99" },
+];
 
 export default function CreateForm() {
   const navigate = useNavigate();
@@ -16,7 +22,7 @@ export default function CreateForm() {
   const postType = location.state?.type || "public";
   const fileInputRef = useRef(null);
 
-  const [form, setForm] = useState({ desc: "", area: "", cat: "" });
+  const [form, setForm] = useState({ desc: "", area: "", cat: "", severity: "High" });
   const [anonymous, setAnonymous] = useState(false);
   const [sendTo, setSendTo] = useState("MLA");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -72,7 +78,7 @@ export default function CreateForm() {
       await supabase.from("posts").insert({
         author_id: user.id,
         type: postType,
-        severity: "High",
+        severity: form.severity,
         category: form.cat,
         description: form.desc.trim(),
         area: form.area.trim(),
@@ -89,6 +95,7 @@ export default function CreateForm() {
       navigate("/post-success", { state: { type: postType } });
     } catch (e) {
       console.error(e);
+      toast(e?.message || "Could not post. Try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -105,7 +112,8 @@ export default function CreateForm() {
         </div>
 
         <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>What's happening? *</label>
-        <textarea placeholder="Describe the issue clearly. More detail = faster action." value={form.desc} onChange={e => set("desc", e.target.value)} style={{ width: "100%", padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 100, resize: "none", marginBottom: 20, boxSizing: "border-box", fontFamily: F.body }} />
+        <textarea placeholder="Describe the issue clearly. More detail = faster action." value={form.desc} onChange={e => { if (e.target.value.length <= 500) set("desc", e.target.value); }} style={{ width: "100%", padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 100, resize: "none", marginBottom: 4, boxSizing: "border-box", fontFamily: F.body }} />
+        <div style={{ textAlign: "right", fontSize: 11, color: form.desc.length > 450 ? C.amber : C.text3, marginBottom: 16, fontFamily: F.body }}>{form.desc.length}/500</div>
 
         <div style={{ position: "relative" }}>
           <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} right={<Ics.Pin />} />
@@ -119,6 +127,19 @@ export default function CreateForm() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {CATEGORIES.map(cat => (
               <button key={cat} onClick={() => set("cat", cat)} style={{ padding: "8px 14px", borderRadius: 20, background: form.cat === cat ? C.purpleDim : C.surface2, border: `1px solid ${form.cat === cat ? C.purple : C.border}`, color: form.cat === cat ? C.purple : C.text, fontSize: 13, fontWeight: form.cat === cat ? 700 : 500, cursor: "pointer", fontFamily: F.body, transition: "all 0.2s" }}>{cat}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Severity */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Severity *</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {SEVERITIES.map(s => (
+              <button key={s.id} onClick={() => set("severity", s.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, background: form.severity === s.id ? `${s.color}20` : C.surface2, border: `1px solid ${form.severity === s.id ? s.color : C.border}`, cursor: "pointer", transition: "all 0.2s", textAlign: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: form.severity === s.id ? s.color : C.text, fontFamily: F.body }}>{s.label}</div>
+                <div style={{ fontSize: 10, color: C.text2, marginTop: 2, fontFamily: F.body }}>{s.desc}</div>
+              </button>
             ))}
           </div>
         </div>

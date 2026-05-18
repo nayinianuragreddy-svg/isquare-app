@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import PhoneFrame from "../../components/PhoneFrame";
 import { Btn, Header } from "../../components/shared";
 import { C, F } from "../../constants/theme";
+import { toast } from "../../lib/toast";
 
 export default function OTP() {
   const [digits, setDigits] = useState(["", "", "", "", ""]);
@@ -15,8 +16,15 @@ export default function OTP() {
   const location = useLocation();
   const { profile, signIn } = useAuth();
   const phone = location.state?.phone || "+91 XXXXXXXXXX";
+  const [resendCd, setResendCd] = useState(0);
 
   useEffect(() => { refs[0].current?.focus(); }, []);
+
+  useEffect(() => {
+    if (resendCd <= 0) return;
+    const t = setTimeout(() => setResendCd(resendCd - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCd]);
 
   const handleDigit = (i, val) => {
     if (!/^\d*$/.test(val)) return;
@@ -91,8 +99,8 @@ export default function OTP() {
           Verify
         </Btn>
 
-        <button onClick={() => navigate("/login")} style={{ background: "none", border: "none", color: C.text2, fontSize: 14, marginTop: 20, cursor: "pointer", fontFamily: F.body }}>
-          Resend OTP
+        <button onClick={() => { if (resendCd > 0) return; toast("OTP resent to " + phone, "info"); setResendCd(30); }} disabled={resendCd > 0} style={{ background: "none", border: "none", color: resendCd > 0 ? C.text3 : C.text2, fontSize: 14, marginTop: 20, cursor: resendCd > 0 ? "default" : "pointer", fontFamily: F.body, opacity: resendCd > 0 ? 0.6 : 1 }}>
+          {resendCd > 0 ? `Resend OTP (${resendCd}s)` : "Resend OTP"}
         </button>
       </div>
     </PhoneFrame>

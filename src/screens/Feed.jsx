@@ -6,7 +6,6 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Avatar, StatusBadge, SeverityTag, I2Button, PostCardSkeleton, BottomSheet, Lightbox } from "../components/shared";
 import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
-import { MOCK_REP_POSTS } from "../data/mockData";
 import { toast } from "../lib/toast";
 
 const LOCATIONS = [
@@ -31,7 +30,6 @@ export default function Feed() {
   const [posts, setPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(true);
   const [supportedPosts, setSupportedPosts] = useState({});
-  const [pollVotes, setPollVotes] = useState({});
   const [unreadCount, setUnreadCount] = useState(0);
 
   const { user } = useAuth();
@@ -47,14 +45,13 @@ export default function Feed() {
     setPostsLoading(true);
     const { data } = await supabase
       .from("posts")
-      .select("*, profiles(name, username, verified, residence)")
+      .select("*, profiles(name, username, verified, residence, avatar_url)")
       .eq("type", "public")
       .is("merged_into", null)
       .order("created_at", { ascending: false });
 
     const dbPosts = (data || []).map(p => ({
       id: p.id,
-      locId: "resident",
       cat: p.category,
       severity: p.severity,
       date: timeAgo(p.created_at),
@@ -66,9 +63,10 @@ export default function Feed() {
       type: "Public",
       author: p.anonymous ? "Anonymous" : (p.profiles?.name || "Citizen"),
       handle: p.anonymous ? "anonymous" : (p.profiles?.username || "citizen"),
-      verified: !p.anonymous && p.profiles?.verified,
-      distance: "0.5 km",
+      verified: !p.anonymous && !!p.profiles?.verified,
       photos: p.photos || [],
+      area: p.area || "",
+      author_id: p.author_id,
     }));
 
     setPosts(dbPosts);
@@ -130,7 +128,7 @@ export default function Feed() {
   };
 
   const sortPosts = (arr) => {
-    const copy = [...arr].filter(p => p.locId === activeLocId);
+    const copy = [...arr];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return copy.filter(p => p.desc?.toLowerCase().includes(q) || p.cat?.toLowerCase().includes(q) || p.author?.toLowerCase().includes(q));
@@ -145,7 +143,6 @@ export default function Feed() {
   };
 
   const filteredPosts = sortPosts(posts);
-  const filteredReps = MOCK_REP_POSTS.filter(f => f.locId === activeLocId);
   const areaStats = {
     open: filteredPosts.filter(p => p.status === "Open" || p.status === "Pending").length,
     resolved: filteredPosts.filter(p => p.status === "Resolved").length,
@@ -319,19 +316,19 @@ export default function Feed() {
         )}
 
         {feedTab === "representative" && (
-          <>
-            <div style={{ padding: "12px 16px", fontSize: 12, color: C.text2, background: C.surface2, borderBottom: `1px solid ${C.border}`, fontFamily: F.body }}>
-              Verified posts from your elected representatives in {activeLoc.name}
-            </div>
-            {filteredReps.length === 0 ? (
-              <div style={{ padding: "60px 24px", textAlign: "center" }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>📢</div>
-                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: F.body }}>No updates yet</div>
+          <div style={{ padding: "60px 24px", textAlign: "center" }}>
+            <div style={{ position: "relative", display: "inline-block", marginBottom: 20 }}>
+              <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.accent}20, ${C.purple}10)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", animation: "pulse1 3s ease-in-out infinite" }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
               </div>
-            ) : filteredReps.map((f, i) => (
-              <RepCard key={f.id || i} p={f} votedIdx={pollVotes[f.id]} onVote={(id, idx) => setPollVotes(prev => ({ ...prev, [id]: idx }))} />
-            ))}
-          </>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>Representative updates</div>
+            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, maxWidth: 280, margin: "0 auto 16px" }}>Verified posts and polls from your elected officials will appear here once they join i².</div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 20, background: C.accentDim, color: C.accent, fontSize: 12, fontWeight: 700, fontFamily: F.body }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+              Coming soon
+            </div>
+          </div>
         )}
       </div>
 
@@ -405,7 +402,7 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
           </div>
         </div>
         <div style={{ color: C.text2, fontSize: 12, marginBottom: 8, display: "flex", alignItems: "center", gap: 6, fontFamily: F.body }}>
-          <Ics.Pin /> <span>{p.distance} · @{p.handle}</span>
+          <Ics.Pin /> <span>{p.area || "Nearby"} · @{p.handle}</span>
         </div>
         <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
           <SeverityTag level={p.severity} blink={blinkCritical} />
@@ -436,59 +433,6 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
             Share
           </button>
         </div>
-      </div>
-    </article>
-  );
-}
-
-function RepCard({ p, votedIdx, onVote }) {
-  const isPoll = p.cat === "Poll";
-  const voted = typeof votedIdx === "number" ? votedIdx : null;
-  const computedPcts = (() => {
-    if (!isPoll || voted === null) return p.options ? p.options.map(o => o.pct) : [];
-    const base = p.options.map(o => o.pct);
-    const others = base.map((_, i) => i).filter(i => i !== voted);
-    const donor = others.reduce((a, b) => (base[a] >= base[b] ? a : b));
-    const out = [...base];
-    out[voted] = Math.min(100, base[voted] + 1);
-    out[donor] = Math.max(0, base[donor] - 1);
-    return out;
-  })();
-
-  return (
-    <article style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, background: `linear-gradient(180deg, ${C.purpleDim} 0%, transparent 80px)` }}>
-      <Avatar name={p.author} isOfficial={true} size={44} />
-      <div style={{ flex: 1 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontWeight: 700, fontSize: 15, color: C.purple, fontFamily: F.body }}>{p.author}</span>
-              <Ics.Badge />
-            </div>
-            <div style={{ fontSize: 12, color: C.text2, marginTop: 2, fontFamily: F.body }}>{p.role}</div>
-          </div>
-          <span style={{ fontSize: 12, color: C.text2, fontFamily: F.body }}>{p.date}</span>
-        </div>
-        <span style={{ padding: "2px 8px", borderRadius: 4, background: isPoll ? C.purpleDim : "rgba(29,155,240,0.15)", color: isPoll ? C.purple : C.accent, fontSize: 11, fontWeight: 700, display: "inline-block", marginBottom: 10 }}>{isPoll ? "ACTIVE POLL" : "OFFICIAL UPDATE"}</span>
-        <p style={{ margin: "0 0 14px", fontSize: 15, lineHeight: 1.5, color: C.text, fontFamily: F.body }}>{p.desc}</p>
-        {isPoll && p.options.map((opt, i) => {
-          const pct = computedPcts[i];
-          const isSelected = voted === i;
-          return (
-            <div key={i} onClick={() => voted === null && onVote(p.id, i)} style={{ marginBottom: 10, cursor: voted === null ? "pointer" : "default" }}>
-              <div style={{ border: `1px solid ${isSelected ? C.purple : C.border}`, borderRadius: 10, padding: "12px 14px", background: voted !== null ? `linear-gradient(90deg, ${isSelected ? C.purpleDim : C.surface2} ${pct}%, transparent ${pct}%)` : C.surface2, display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.3s" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSelected ? C.purple : C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {isSelected && <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.purple }} />}
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: isSelected ? 700 : 500, fontFamily: F.body }}>{opt.label}</span>
-                </div>
-                {voted !== null && <span style={{ fontSize: 14, fontWeight: 700, color: isSelected ? C.purple : C.text2, fontFamily: F.body }}>{pct}%</span>}
-              </div>
-            </div>
-          );
-        })}
-        {isPoll && <div style={{ color: C.text2, fontSize: 12, marginTop: 6, fontFamily: F.body }}>{(p.totalVotes + (voted !== null ? 1 : 0)).toLocaleString()} votes{voted !== null && " · ✓ You voted"}</div>}
       </div>
     </article>
   );
