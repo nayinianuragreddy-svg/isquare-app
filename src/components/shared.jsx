@@ -35,14 +35,14 @@ export const Input = ({ label, placeholder, value, onChange, disabled, type = "t
   </div>
 );
 
-export const Avatar = ({ name, size = 40, isOfficial = false }) => {
+export const Avatar = ({ name, size = 40, isOfficial = false, src }) => {
   const palette = ["#7856FF", "#1D9BF0", "#00BA7C", "#FFB020", "#F04438", "#EC4899", "#14B8A6", "#F59E0B", "#8B5CF6", "#06B6D4"];
   const hash = (name || "?").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   const color = palette[hash % palette.length];
   const bgStyle = isOfficial ? `linear-gradient(135deg, ${C.purple}40, ${C.accent}40)` : `linear-gradient(135deg, ${color}55, ${color}25)`;
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", background: bgStyle, border: isOfficial ? `2px solid ${C.purple}` : `1px solid ${color}60`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", color: isOfficial ? C.purple : C.text }}>
-      {isOfficial ? <Ics.Shield /> : <span style={{ fontSize: size * 0.4, fontWeight: 700 }}>{name?.[0]?.toUpperCase() || "?"}</span>}
+      {src ? <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isOfficial ? <Ics.Shield /> : <span style={{ fontSize: size * 0.4, fontWeight: 700 }}>{name?.[0]?.toUpperCase() || "?"}</span>}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import PhoneFrame from "../../components/PhoneFrame";
@@ -11,13 +11,15 @@ import { toast } from "../../lib/toast";
 export default function Registration() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { saveProfile } = useAuth();
+  const { user, saveProfile } = useAuth();
   const phone = location.state?.phone || "+91 9876543219";
+  const avatarInputRef = useRef(null);
 
   const [form, setForm] = useState({ name: "", username: "", gender: "", dob: { dd: "", mm: "", yyyy: "" }, residence: "" });
   const [usernameStatus, setUsernameStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [avatarPicked, setAvatarPicked] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -35,6 +37,23 @@ export default function Registration() {
     return d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1920 && y <= 2020;
   };
 
+  const handleAvatarPick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setAvatarUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/avatar.${ext}`;
+      await supabase.storage.from("post-images").upload(path, file, { upsert: true });
+      const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+      setAvatarUrl(data.publicUrl + "?t=" + Date.now());
+    } catch (err) {
+      toast("Upload failed", "error");
+    }
+    setAvatarUploading(false);
+    e.target.value = "";
+  };
+
   const canSubmit = form.name.trim() && form.gender && form.username.length >= 3 && usernameStatus === "available" && form.residence.trim() && dobValid();
 
   const handleSubmit = async () => {
@@ -49,6 +68,7 @@ export default function Registration() {
         dob: `${form.dob.yyyy}-${form.dob.mm.padStart(2,"0")}-${form.dob.dd.padStart(2,"0")}`,
         residence: form.residence.trim(),
         verified: false,
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
       });
       navigate("/success");
     } catch (e) {
@@ -66,12 +86,19 @@ export default function Registration() {
 
         {/* Avatar */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-          <div onClick={() => setAvatarPicked(true)} role="button" tabIndex={0} style={{ width: 88, height: 88, borderRadius: "50%", background: avatarPicked ? C.gradient : C.surface2, border: avatarPicked ? "none" : `2px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", color: avatarPicked ? C.text : C.text2, fontSize: 32, fontWeight: 800 }}>
-            {avatarPicked && form.name ? form.name[0].toUpperCase() : <Ics.User size={40} />}
+          <div onClick={() => avatarInputRef.current?.click()} role="button" tabIndex={0} style={{ width: 88, height: 88, borderRadius: "50%", background: avatarUrl ? "none" : C.surface2, border: avatarUrl ? "none" : `2px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", color: C.text2, fontSize: 32, fontWeight: 800, overflow: "hidden" }}>
+            {avatarUploading ? (
+              <div style={{ width: 28, height: 28, border: `2px solid ${C.purple}`, borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+            ) : avatarUrl ? (
+              <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <Ics.User size={40} />
+            )}
             <div style={{ position: "absolute", bottom: -2, right: -2, background: C.gradient, width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `3px solid ${C.bg}`, color: C.text }}>
-              <Ics.Plus />
+              {avatarUrl ? <Ics.Edit /> : <Ics.Plus />}
             </div>
           </div>
+          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarPick} />
         </div>
 
         <Input label="Mobile Number *" value={phone} disabled />

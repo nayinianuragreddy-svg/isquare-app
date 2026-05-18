@@ -64,6 +64,7 @@ export default function Feed() {
       author: p.anonymous ? "Anonymous" : (p.profiles?.name || "Citizen"),
       handle: p.anonymous ? "anonymous" : (p.profiles?.username || "citizen"),
       verified: !p.anonymous && !!p.profiles?.verified,
+      avatar_url: p.anonymous ? null : (p.profiles?.avatar_url || null),
       photos: p.photos || [],
       area: p.area || "",
       author_id: p.author_id,
@@ -167,8 +168,8 @@ export default function Feed() {
 
           {/* Profile */}
           <div onClick={() => navigate("/profile")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: C.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, color: C.text }}>
-              {profile?.name?.[0]?.toUpperCase() || "A"}
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: profile?.avatar_url ? "none" : C.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, color: C.text, overflow: "hidden" }}>
+              {profile?.avatar_url ? <img src={profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (profile?.name?.[0]?.toUpperCase() || "A")}
             </div>
             <div>
               <div style={{ fontSize: 11, color: C.text2, fontFamily: F.body }}>Welcome back,</div>
@@ -392,7 +393,7 @@ function PostCard({ p, onClick, onSupport, onShare, supported, blinkCritical }) 
 
   return (
     <article onClick={onClick} className={heatClass} style={{ padding: "16px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", display: "flex", gap: 12, position: "relative", transition: "border-color 0.3s" }}>
-      <Avatar name={p.author} />
+      <Avatar name={p.author} src={p.avatar_url} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>

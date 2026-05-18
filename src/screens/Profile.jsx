@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -10,12 +10,33 @@ import { toast } from "../lib/toast";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { profile, signOut, saveProfile } = useAuth();
+  const { user, profile, signOut, saveProfile } = useAuth();
+  const avatarInputRef = useRef(null);
   const [settingsSheet, setSettingsSheet] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: profile?.name || "", username: profile?.username || "", residence: profile?.residence || "" });
   const [saving, setSaving] = useState(false);
   const [stats, setStats] = useState({ raised: 0, resolved: 0, isquared: 0 });
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setAvatarUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/avatar.${ext}`;
+      await supabase.storage.from("post-images").upload(path, file, { upsert: true });
+      const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+      const url = data.publicUrl + "?t=" + Date.now();
+      await saveProfile({ avatar_url: url });
+      toast("Photo updated");
+    } catch (err) {
+      toast("Upload failed", "error");
+    }
+    setAvatarUploading(false);
+    e.target.value = "";
+  };
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -58,9 +79,19 @@ export default function Profile() {
         {/* Avatar + info */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", background: C.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800 }}>
-              {profile?.name?.[0]?.toUpperCase() || "A"}
+            <div onClick={() => avatarInputRef.current?.click()} style={{ width: 64, height: 64, borderRadius: "50%", background: profile?.avatar_url ? "none" : C.gradient, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800, cursor: "pointer", position: "relative", overflow: "hidden" }}>
+              {avatarUploading ? (
+                <div style={{ width: 24, height: 24, border: `2px solid ${C.text}`, borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              ) : profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                profile?.name?.[0]?.toUpperCase() || "A"
+              )}
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 20, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Ics.Camera />
+              </div>
             </div>
+            <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarUpload} />
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 17, fontWeight: 800, fontFamily: F.body }}>{profile?.name || "Citizen"}</span>
