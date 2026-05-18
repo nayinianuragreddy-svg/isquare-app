@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { C, F } from "../constants/theme";
 import { Ics } from "./icons";
 
@@ -79,16 +79,24 @@ export const SeverityTag = ({ level, blink = true }) => {
 };
 
 export const I2Button = ({ active, count, onClick }) => {
+  const [popping, setPopping] = useState(false);
+  const prevCount = useRef(count);
+
+  if (count !== prevCount.current) {
+    prevCount.current = count;
+    if (!popping) { setPopping(true); setTimeout(() => setPopping(false), 400); }
+  }
+
   const handleClick = (e) => {
     if (navigator.vibrate) navigator.vibrate(12);
     onClick?.(e);
   };
   return (
-    <button onClick={handleClick} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: active ? C.purpleDim : "transparent", border: `1px solid ${active ? C.purple : C.border}`, borderRadius: 20, cursor: "pointer", color: active ? C.purple : C.text2, fontSize: 13, fontWeight: 600, transition: "all 0.2s", fontFamily: F.body, transform: active ? "scale(1)" : "scale(1)" }}>
+    <button onClick={handleClick} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: active ? C.purpleDim : "transparent", border: `1px solid ${active ? C.purple : C.border}`, borderRadius: 20, cursor: "pointer", color: active ? C.purple : C.text2, fontSize: 13, fontWeight: 600, transition: "all 0.2s", fontFamily: F.body }}>
       <span style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 900, fontSize: 15, lineHeight: 1, display: "inline-flex", alignItems: "flex-start", letterSpacing: -0.5 }}>
         i<span style={{ fontSize: 9, marginLeft: 0, marginTop: -2, lineHeight: 1 }}>²</span>
       </span>
-      <span>{count?.toLocaleString()}</span>
+      <span className={popping ? "count-pop" : ""} style={{ display: "inline-block" }}>{count?.toLocaleString()}</span>
     </button>
   );
 };

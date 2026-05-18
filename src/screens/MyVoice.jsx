@@ -4,13 +4,19 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
 import { StatusBadge, SeverityTag, I2Button, PostCardSkeleton } from "../components/shared";
-import { Ics } from "../components/icons";
+import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
 import { toast } from "../lib/toast";
 
 export default function MyVoice() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false).then(({ count }) => setUnreadCount(count || 0));
+  }, [user]);
   const [filter, setFilter] = useState("Public");
   const [statusFilter, setStatusFilter] = useState("All");
   const [myPosts, setMyPosts] = useState([]);
@@ -122,32 +128,38 @@ export default function MyVoice() {
         ))}
       </div>
 
-      <BottomNavBar active="voice" navigate={navigate} />
+      <BottomNavBar active="voice" navigate={navigate} unreadCount={unreadCount} />
     </PhoneFrame>
   );
 }
 
-function BottomNavBar({ active, navigate }) {
+function BottomNavBar({ active, navigate, unreadCount = 0 }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-around", padding: "10px 0 20px", borderTop: `1px solid ${C.border}`, background: "rgba(10,10,15,0.95)", backdropFilter: "blur(20px)", flexShrink: 0 }}>
-      {[{ id: "feed", label: "Home", Icon: Ics.Home },
+    <div style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, background: "rgba(10,10,15,0.95)", backdropFilter: "blur(20px)", flexShrink: 0 }}>
+      {[{ id: "feed", label: "Home", Icon: Ics.Home, path: "/feed" },
+        { id: "notifications", label: "Alerts", Icon: Ics.Bell, path: "/notifications", badge: unreadCount },
         { id: "create", label: "Create", isCreate: true },
-        { id: "voice", label: "My Voice", Icon: Ics.Voice }].map(n => {
+        { id: "voice", label: "My Voice", Icon: Ics.Voice, path: "/voice" }].map(n => {
         const isActive = active === n.id;
         if (n.isCreate) return (
-          <button key="create" onClick={() => navigate("/create")} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 60, color: C.text, position: "relative" }}>
-            <div style={{ position: "absolute", top: -22, left: "50%", transform: "translateX(-50%)", width: 64, height: 32, borderRadius: "0 0 32px 32px", background: C.bg, border: `1px solid ${C.border}`, borderTop: "none", pointerEvents: "none" }} />
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: C.gradient, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 20px rgba(120,86,255,0.45), 0 0 0 3px ${C.bg}`, marginTop: -14, position: "relative", zIndex: 1 }}><Ics.Plus /></div>
-            <span style={{ fontSize: 10, fontWeight: 600, color: C.text2, position: "relative", zIndex: 1, fontFamily: F.body }}>Create</span>
+          <button key="create" onClick={() => navigate("/create")} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52, color: C.text, position: "relative" }}>
+            <div style={{ position: "absolute", top: -20, left: "50%", transform: "translateX(-50%)", width: 56, height: 28, borderRadius: "0 0 28px 28px", background: C.bg, border: `1px solid ${C.border}`, borderTop: "none", pointerEvents: "none" }} />
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.gradient, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 20px rgba(120,86,255,0.45), 0 0 0 3px ${C.bg}`, marginTop: -12, position: "relative", zIndex: 1 }}><Ics.Plus /></div>
+            <span style={{ fontSize: 9, fontWeight: 600, color: C.text2, position: "relative", zIndex: 1, fontFamily: F.body }}>Create</span>
           </button>
         );
         return (
-          <button key={n.id} onClick={() => { if (navigator.vibrate) navigator.vibrate(8); navigate("/" + (n.id === "feed" ? "feed" : n.id)); }} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 60, transition: "color 0.2s", position: "relative" }}>
-            <div className={isActive ? "nav-active-icon" : ""} style={{ display: "flex" }}>
+          <button key={n.id} onClick={() => { if (navigator.vibrate) navigator.vibrate(8); navigate(n.path); }} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52, transition: "color 0.2s", position: "relative" }}>
+            <div className={isActive ? "nav-active-icon" : ""} style={{ display: "flex", position: "relative" }}>
               <n.Icon a={isActive} />
+              {n.badge > 0 && (
+                <div style={{ position: "absolute", top: -4, right: -6, minWidth: 16, height: 16, borderRadius: 8, background: C.red, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff", padding: "0 4px", border: `2px solid ${C.bg}` }}>
+                  {n.badge > 9 ? "9+" : n.badge}
+                </div>
+              )}
             </div>
-            <span style={{ fontSize: 10, fontWeight: 600, fontFamily: F.body }}>{n.label}</span>
-            {isActive && <div style={{ position: "absolute", bottom: -4, width: 4, height: 4, borderRadius: "50%", background: C.gradient }} />}
+            <span style={{ fontSize: 9, fontWeight: 600, fontFamily: F.body }}>{n.label}</span>
+            {isActive && <div style={{ position: "absolute", bottom: -4, width: 4, height: 4, borderRadius: "50%", background: C.purple }} />}
           </button>
         );
       })}

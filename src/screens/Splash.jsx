@@ -16,7 +16,7 @@ export default function Splash() {
       if (user && profile?.name) navigate("/feed");
       else if (user && !profile?.name) navigate("/register");
       else navigate("/login");
-    }, 3200);
+    }, 1800);
     return () => clearTimeout(t);
   }, [loading, user, profile]);
 

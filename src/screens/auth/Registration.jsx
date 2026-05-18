@@ -8,6 +8,12 @@ import { C, F } from "../../constants/theme";
 import { supabase } from "../../lib/supabase";
 import { toast } from "../../lib/toast";
 
+const STEPS = [
+  { label: "Identity", icon: "👤" },
+  { label: "Personal", icon: "📋" },
+  { label: "Location", icon: "📍" },
+];
+
 export default function Registration() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -15,6 +21,7 @@ export default function Registration() {
   const phone = location.state?.phone || "+91 9876543219";
   const avatarInputRef = useRef(null);
 
+  const [step, setStep] = useState(0);
   const [form, setForm] = useState({ name: "", username: "", gender: "", dob: { dd: "", mm: "", yyyy: "" }, residence: "" });
   const [usernameStatus, setUsernameStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,10 +61,14 @@ export default function Registration() {
     e.target.value = "";
   };
 
-  const canSubmit = form.name.trim() && form.gender && form.username.length >= 3 && usernameStatus === "available" && form.residence.trim() && dobValid();
+  // Step validation
+  const canStep1 = form.name.trim() && form.username.length >= 3 && usernameStatus === "available";
+  const canStep2 = form.gender && dobValid();
+  const canStep3 = form.residence.trim();
+  const canProceed = [canStep1, canStep2, canStep3];
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canStep3) return;
     setLoading(true);
     try {
       await saveProfile({
@@ -79,70 +90,118 @@ export default function Registration() {
     }
   };
 
+  const handleBack = () => {
+    if (step > 0) setStep(step - 1);
+    else navigate("/login");
+  };
+
   return (
     <PhoneFrame>
-      <Header title="Create your profile" onBack={() => navigate("/login")} />
-      <div style={{ padding: "20px 24px", flex: 1, overflowY: "auto" }}>
+      <Header title="Create your profile" onBack={handleBack} />
+      <div style={{ padding: "16px 24px", flex: 1, overflowY: "auto" }}>
 
-        {/* Avatar */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-          <div onClick={() => avatarInputRef.current?.click()} role="button" tabIndex={0} style={{ width: 88, height: 88, borderRadius: "50%", background: avatarUrl ? "none" : C.surface2, border: avatarUrl ? "none" : `2px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", color: C.text2, fontSize: 32, fontWeight: 800, overflow: "hidden" }}>
-            {avatarUploading ? (
-              <div style={{ width: 28, height: 28, border: `2px solid ${C.purple}`, borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-            ) : avatarUrl ? (
-              <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            ) : (
-              <Ics.User size={40} />
-            )}
-            <div style={{ position: "absolute", bottom: -2, right: -2, background: C.gradient, width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `3px solid ${C.bg}`, color: C.text }}>
-              {avatarUrl ? <Ics.Edit /> : <Ics.Plus />}
+        {/* Progress bar */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+          {STEPS.map((s, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+              <div style={{ width: "100%", height: 4, borderRadius: 2, background: i <= step ? C.purple : C.surface3, transition: "background 0.3s" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 12 }}>{s.icon}</span>
+                <span style={{ fontSize: 11, color: i <= step ? C.text : C.text3, fontWeight: i === step ? 700 : 500, fontFamily: F.body }}>{s.label}</span>
+              </div>
             </div>
+          ))}
+        </div>
+
+        {/* Step 1: Identity */}
+        {step === 0 && (
+          <div className="fade-in" key="step-0">
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>Who are you?</div>
+            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>Your profile picture and name will be visible to others when you speak up.</p>
+
+            {/* Avatar */}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+              <div onClick={() => avatarInputRef.current?.click()} role="button" tabIndex={0} style={{ width: 88, height: 88, borderRadius: "50%", background: avatarUrl ? "none" : C.surface2, border: avatarUrl ? "none" : `2px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", cursor: "pointer", color: C.text2, fontSize: 32, fontWeight: 800, overflow: "hidden" }}>
+                {avatarUploading ? (
+                  <div style={{ width: 28, height: 28, border: `2px solid ${C.purple}`, borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                ) : avatarUrl ? (
+                  <img src={avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <Ics.User size={40} />
+                )}
+                <div style={{ position: "absolute", bottom: -2, right: -2, background: C.gradient, width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", border: `3px solid ${C.bg}`, color: C.text }}>
+                  {avatarUrl ? <Ics.Edit /> : <Ics.Plus />}
+                </div>
+              </div>
+              <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarPick} />
+            </div>
+
+            <Input label="Full Name *" placeholder="e.g. Aditya Kumar" value={form.name} onChange={e => set("name", e.target.value)} />
+
+            {/* Username */}
+            <div style={{ marginBottom: 4 }}>
+              <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Username *</label>
+              <div style={{ border: `1px solid ${usernameStatus === "taken" ? C.red : usernameStatus === "available" ? C.green : C.border}`, borderRadius: 10, overflow: "hidden", background: C.surface2 }}>
+                <input placeholder="e.g. aditya_k" value={form.username} onChange={e => checkUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} style={{ width: "100%", padding: "14px", background: "transparent", border: "none", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: F.body }} />
+              </div>
+            </div>
+            {usernameStatus === "taken" && <div style={{ color: C.red, fontSize: 12, marginBottom: 16, marginTop: 4, fontFamily: F.body }}>That username is taken.</div>}
+            {usernameStatus === "available" && <div style={{ color: C.green, fontSize: 12, marginBottom: 16, marginTop: 4, fontFamily: F.body }}>✓ Available</div>}
+            {!usernameStatus && <div style={{ height: 20 }} />}
+
+            <Btn onClick={() => setStep(1)} disabled={!canStep1}>Next</Btn>
           </div>
-          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarPick} />
-        </div>
+        )}
 
-        <Input label="Mobile Number *" value={phone} disabled />
-        <Input label="Full Name *" placeholder="e.g. Aditya Kumar" value={form.name} onChange={e => set("name", e.target.value)} />
+        {/* Step 2: Personal info */}
+        {step === 1 && (
+          <div className="fade-in" key="step-1">
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>A little about you</div>
+            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>This helps us verify you're a real resident. None of this is shown publicly.</p>
 
-        {/* Username */}
-        <div style={{ marginBottom: 4 }}>
-          <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Username *</label>
-          <div style={{ border: `1px solid ${usernameStatus === "taken" ? C.red : usernameStatus === "available" ? C.green : C.border}`, borderRadius: 10, overflow: "hidden", background: C.surface2 }}>
-            <input placeholder="e.g. aditya_k" value={form.username} onChange={e => checkUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} style={{ width: "100%", padding: "14px", background: "transparent", border: "none", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: F.body }} />
+            <Input label="Mobile Number *" value={phone} disabled />
+
+            {/* Gender */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Gender *</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["Male", "Female", "Other"].map(g => (
+                  <button key={g} onClick={() => set("gender", g)} style={{ flex: 1, padding: "12px", borderRadius: 10, background: form.gender === g ? C.purpleDim : C.surface2, border: `1px solid ${form.gender === g ? C.purple : C.border}`, color: form.gender === g ? C.purple : C.text, fontSize: 14, fontWeight: form.gender === g ? 700 : 500, cursor: "pointer", fontFamily: F.body, transition: "all 0.2s" }}>{g}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* DOB */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Date of Birth *</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[{ p: "DD", k: "dd", m: 2 }, { p: "MM", k: "mm", m: 2 }, { p: "YYYY", k: "yyyy", m: 4 }].map(f => (
+                  <input key={f.k} placeholder={f.p} value={form.dob[f.k]} onChange={e => set("dob", { ...form.dob, [f.k]: e.target.value.replace(/\D/g, "") })} maxLength={f.m} style={{ flex: f.k === "yyyy" ? 2 : 1, padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", textAlign: "center", fontFamily: F.body }} />
+                ))}
+              </div>
+            </div>
+
+            <Btn onClick={() => setStep(2)} disabled={!canStep2}>Next</Btn>
           </div>
-        </div>
-        {usernameStatus === "taken" && <div style={{ color: C.red, fontSize: 12, marginBottom: 16, marginTop: 4 }}>That username is taken.</div>}
-        {usernameStatus === "available" && <div style={{ color: C.green, fontSize: 12, marginBottom: 16, marginTop: 4 }}>✓ Available</div>}
-        {!usernameStatus && <div style={{ height: 20 }} />}
+        )}
 
-        {/* Gender */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Gender *</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {["Male", "Female", "Other"].map(g => (
-              <button key={g} onClick={() => set("gender", g)} style={{ flex: 1, padding: "12px", borderRadius: 10, background: form.gender === g ? C.purpleDim : C.surface2, border: `1px solid ${form.gender === g ? C.purple : C.border}`, color: form.gender === g ? C.purple : C.text, fontSize: 14, fontWeight: form.gender === g ? 700 : 500, cursor: "pointer", fontFamily: F.body, transition: "all 0.2s" }}>{g}</button>
-            ))}
+        {/* Step 3: Location */}
+        {step === 2 && (
+          <div className="fade-in" key="step-2">
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>Where do you live?</div>
+            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>We'll show you civic issues near your residence and route your requests to the right representative.</p>
+
+            <Input label="Residence *" placeholder="Colony / Area, City" value={form.residence} onChange={e => set("residence", e.target.value)} right={<Ics.Pin />} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: C.purpleDim, border: `1px solid ${C.purple}30`, borderRadius: 10, marginBottom: 24, color: C.purple, fontSize: 13, fontFamily: F.body }}>
+              <Ics.Shield />
+              <span>Your ID will be verified within 24 hours</span>
+            </div>
+
+            <Btn onClick={handleSubmit} disabled={!canStep3} loading={loading}>Create Account</Btn>
           </div>
-        </div>
+        )}
 
-        {/* DOB */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Date of Birth *</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[{ p: "DD", k: "dd", m: 2 }, { p: "MM", k: "mm", m: 2 }, { p: "YYYY", k: "yyyy", m: 4 }].map(f => (
-              <input key={f.k} placeholder={f.p} value={form.dob[f.k]} onChange={e => set("dob", { ...form.dob, [f.k]: e.target.value.replace(/\D/g, "") })} maxLength={f.m} style={{ flex: f.k === "yyyy" ? 2 : 1, padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", textAlign: "center", fontFamily: F.body }} />
-            ))}
-          </div>
-        </div>
-
-        <Input label="Residence *" placeholder="Colony / Area, City" value={form.residence} onChange={e => set("residence", e.target.value)} right={<Ics.Pin />} />
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: C.purpleDim, border: `1px solid ${C.purple}30`, borderRadius: 10, marginBottom: 24, color: C.purple, fontSize: 13, fontFamily: F.body }}>
-          <Ics.Shield />
-          <span>Your ID will be verified within 24 hours</span>
-        </div>
-
-        <Btn onClick={handleSubmit} disabled={!canSubmit} loading={loading}>Create Account</Btn>
         <div style={{ height: 20 }} />
       </div>
     </PhoneFrame>

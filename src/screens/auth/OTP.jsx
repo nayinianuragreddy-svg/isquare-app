@@ -41,7 +41,7 @@ export default function OTP() {
   };
 
   const verify = async (code) => {
-    if (code !== "12345") { setError("Incorrect OTP. Try 12345."); return; }
+    if (code !== "12345") { setError("Incorrect OTP. Please try again."); return; }
     setLoading(true);
     try {
       await signIn();
@@ -74,9 +74,13 @@ export default function OTP() {
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5, fontFamily: F.body }}>Enter OTP</div>
         </div>
-        <p style={{ color: C.text2, fontSize: 14, marginBottom: 36, lineHeight: 1.5, fontFamily: F.body }}>
+        <p style={{ color: C.text2, fontSize: 14, marginBottom: 12, lineHeight: 1.5, fontFamily: F.body }}>
           Sent to <span style={{ color: C.text, fontWeight: 700 }}>{phone}</span>
         </p>
+        <div style={{ padding: "10px 14px", background: C.purpleDim, border: `1px solid ${C.purple}30`, borderRadius: 10, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🔑</span>
+          <span style={{ fontSize: 13, color: C.purple, fontWeight: 600, fontFamily: F.body }}>Demo mode — enter <strong>1 2 3 4 5</strong></span>
+        </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12, justifyContent: "center" }}>
           {digits.map((d, i) => (

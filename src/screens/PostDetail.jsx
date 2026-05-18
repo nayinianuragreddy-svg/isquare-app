@@ -52,7 +52,7 @@ export default function PostDetail() {
   const fetchPost = async () => {
     const { data } = await supabase
       .from("posts")
-      .select("*, profiles(name, username, verified)")
+      .select("*, profiles(name, username, verified, avatar_url)")
       .eq("id", id)
       .single();
     if (data) setPost({
@@ -63,6 +63,7 @@ export default function PostDetail() {
       author: data.anonymous ? "Anonymous" : (data.profiles?.name || "Citizen"),
       handle: data.anonymous ? "anonymous" : (data.profiles?.username || "citizen"),
       verified: !data.anonymous && !!data.profiles?.verified,
+      avatar_url: data.anonymous ? null : (data.profiles?.avatar_url || null),
       area: data.area || "", photos: data.photos || [], author_id: data.author_id,
     });
   };
@@ -114,15 +115,14 @@ export default function PostDetail() {
 
   const toggleSupport = async () => {
     if (!user || !post) return;
+    const wasSupported = supported;
     setSupported(s => !s);
-    setPost(p => ({ ...p, agree: p.agree + (supported ? -1 : 1) }));
-    if (supported) {
+    setPost(p => ({ ...p, agree: p.agree + (wasSupported ? -1 : 1) }));
+    if (wasSupported) {
       await supabase.from("votes").delete().eq("post_id", id).eq("user_id", user.id);
-      await supabase.from("posts").update({ agree_count: Math.max(0, post.agree - 1) }).eq("id", id);
     } else {
       toast("Your voice added");
       await supabase.from("votes").insert({ post_id: id, user_id: user.id });
-      await supabase.from("posts").update({ agree_count: post.agree + 1 }).eq("id", id);
     }
   };
 
@@ -132,7 +132,7 @@ export default function PostDetail() {
     const text = replyText.trim();
     setReplyText("");
     await supabase.from("comments").insert({ post_id: id, author_id: user.id, text });
-    await supabase.from("posts").update({ comments_count: (post?.comments || 0) + 1 }).eq("id", id);
+    setPost(p => p ? { ...p, comments: (p.comments || 0) + 1 } : p);
     toast("Reply posted");
     setLoading(false);
   };
@@ -240,7 +240,7 @@ export default function PostDetail() {
         {/* Post content */}
         <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
-            <Avatar name={post.author} size={48} />
+            <Avatar name={post.author} size={48} src={post.avatar_url} />
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                 <span style={{ fontWeight: 700, fontSize: 15, fontFamily: F.body }}>{post.author}</span>

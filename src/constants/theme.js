@@ -53,6 +53,8 @@ export const STYLES = `
   @keyframes navBounce { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
   .nav-active-icon { animation: navBounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
   @keyframes pullSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes countPop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 70% { transform: scale(0.9); } 100% { transform: scale(1); } }
+  .count-pop { animation: countPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: #050508; overscroll-behavior: none; }
   .skeleton { background: linear-gradient(90deg, #14141B 0%, #1F1F2A 50%, #14141B 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
