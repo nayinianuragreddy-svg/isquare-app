@@ -35,8 +35,25 @@ export default function Feed() {
   const [scrolled, setScrolled] = useState(false);
 
   const [newPostsCount, setNewPostsCount] = useState(0);
+  const [, setTick] = useState(0); // bumps every minute to refresh timeAgo strings
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   const residenceName = profile?.residence?.split(",")[0]?.trim() || "Your Area";
+
+  // Timestamp refresh ticker
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Offline detection
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     setPostsLoading(true);
@@ -55,7 +72,7 @@ export default function Feed() {
         id: p.id,
         cat: p.category,
         severity: p.severity,
-        date: timeAgo(p.created_at),
+        created_at: p.created_at, // raw — timeAgo computed on render for live refresh
         fullDate: new Date(p.created_at).toLocaleDateString("en-IN"),
         desc: p.description,
         status: p.status,
@@ -210,13 +227,7 @@ export default function Feed() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Location label */}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 12px", color: C.text, fontSize: 12, fontFamily: F.body, fontWeight: 600 }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill={C.green}><circle cx="12" cy="12" r="5" /></svg>
-              <span style={{ maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{residenceName}</span>
-            </div>
-
-            {/* Map */}
+            {/* Map button */}
             <button onClick={() => navigate("/map")} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", color: C.text, cursor: "pointer" }}>
               <Ics.Pin />
             </button>
@@ -242,6 +253,13 @@ export default function Feed() {
           ))}
         </div>
       </div>
+
+      {/* Offline banner */}
+      {!isOnline && (
+        <div style={{ background: C.amber, color: "#000", padding: "8px 16px", textAlign: "center", fontSize: 13, fontWeight: 700, fontFamily: F.body, flexShrink: 0 }}>
+          📵 You're offline — showing cached content
+        </div>
+      )}
 
       {/* Feed */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overscrollBehavior: "none" }}
@@ -301,7 +319,7 @@ export default function Feed() {
             ) : filteredPosts.length === 0 ? (
               <EmptyFeedState onSpeak={() => setCreateModalOpen(true)} />
             ) : filteredPosts.map((p, idx) => (
-              <PostCard key={p.id} p={{ ...p, _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} onReport={() => reportPost(p.id)} listIndex={idx} />
+              <PostCard key={p.id} p={{ ...p, date: timeAgo(p.created_at), _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} onReport={() => reportPost(p.id)} listIndex={idx} />
             ))}
           </>
         )}
@@ -442,13 +460,21 @@ function PostCard({ p, onClick, onSupport, onReport, supported, listIndex = 0 })
         {/* Description */}
         <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.5, color: C.text, fontFamily: F.body, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.desc}</p>
 
-        {/* Photo */}
-        {p.photos?.[0] && (
-          <div onClick={e => { e.stopPropagation(); p._onLightbox?.(p.photos[0]); }} style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 10, border: `1px solid ${C.border}`, cursor: "zoom-in", position: "relative" }}>
-            {!imgLoaded && <div className="skeleton" style={{ position: "absolute", inset: 0 }} />}
-            <img src={p.photos[0]} alt="" onLoad={() => setImgLoaded(true)} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: imgLoaded ? 1 : 0, transition: "opacity 0.3s" }} />
-          </div>
-        )}
+        {/* Photo / Video */}
+        {p.photos?.[0] && (() => {
+          const isVid = p.photos[0].startsWith("video::");
+          const mediaUrl = isVid ? p.photos[0].slice(7) : p.photos[0];
+          return isVid ? (
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 10, border: `1px solid ${C.border}`, position: "relative" }}>
+              <video src={mediaUrl} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover", background: "#000" }} />
+            </div>
+          ) : (
+            <div onClick={e => { e.stopPropagation(); p._onLightbox?.(mediaUrl); }} style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 10, border: `1px solid ${C.border}`, cursor: "zoom-in", position: "relative" }}>
+              {!imgLoaded && <div className="skeleton" style={{ position: "absolute", inset: 0 }} />}
+              <img src={mediaUrl} alt="" onLoad={() => setImgLoaded(true)} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: imgLoaded ? 1 : 0, transition: "opacity 0.3s" }} />
+            </div>
+          );
+        })()}
 
         {/* Action bar */}
         <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -495,30 +521,44 @@ function PostCard({ p, onClick, onSupport, onReport, supported, listIndex = 0 })
   );
 }
 
-/* ── Bottom Navigation ── */
-function BottomNav({ active, unreadCount = 0, onCreateClick, onNotifClick }) {
+/* ── Bottom Navigation (5-item, Create centred absolutely) ── */
+export function BottomNav({ active, unreadCount = 0, onCreateClick, onNotifClick }) {
   const navigate = useNavigate();
+  const NAV = [
+    { id: "feed",          label: "Home",     Icon: Ics.Home,    path: "/feed" },
+    { id: "notifications", label: "Alerts",   Icon: Ics.Bell,    path: "/notifications", badge: unreadCount },
+    null, // spacer — Create button is absolutely centred here
+    { id: "voice",         label: "My Voice", Icon: Ics.Voice,   path: "/voice" },
+    { id: "profile",       label: "Profile",  Icon: Ics.Profile, path: "/profile" },
+  ];
   return (
-    <div className="glass-nav" style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
-      {[{ id: "feed", label: "Home", Icon: Ics.Home, path: "/feed" },
-        { id: "notifications", label: "Alerts", Icon: Ics.Bell, path: "/notifications", badge: unreadCount },
-        { id: "create", label: "Create", isCreate: true },
-        { id: "voice", label: "My Voice", Icon: Ics.Voice, path: "/voice" }].map(n => {
+    <div className="glass-nav" style={{ position: "relative", display: "flex", alignItems: "flex-start", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
+      {/* Create — absolutely centred at 50% */}
+      <button
+        onClick={onCreateClick || (() => navigate("/create"))}
+        aria-label="Create"
+        style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: 0, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, zIndex: 10 }}
+      >
+        <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 56, height: 28, borderRadius: "0 0 28px 28px", background: C.bg, border: `1px solid ${C.border}`, borderTop: "none", pointerEvents: "none" }} />
+        <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.gradient, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 20px rgba(120,86,255,0.45), 0 0 0 3px ${C.bg}`, marginTop: -12, position: "relative", zIndex: 1 }}>
+          <Ics.Plus />
+        </div>
+        <span style={{ fontSize: 9, fontWeight: 600, color: C.text2, position: "relative", zIndex: 1, fontFamily: F.body }}>Create</span>
+      </button>
+
+      {NAV.map((n, idx) => {
+        if (!n) return <div key="spacer" style={{ flex: 1 }} />;
         const isActive = active === n.id;
-        if (n.isCreate) return (
-          <button key="create" onClick={onCreateClick || (() => navigate("/create"))} aria-label="Create" style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52, color: C.text, position: "relative" }}>
-            <div style={{ position: "absolute", top: -20, left: "50%", transform: "translateX(-50%)", width: 56, height: 28, borderRadius: "0 0 28px 28px", background: C.bg, border: `1px solid ${C.border}`, borderTop: "none", pointerEvents: "none" }} />
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: C.gradient, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 4px 20px rgba(120,86,255,0.45), 0 0 0 3px ${C.bg}`, marginTop: -12, position: "relative", zIndex: 1 }}><Ics.Plus /></div>
-            <span style={{ fontSize: 9, fontWeight: 600, color: C.text2, position: "relative", zIndex: 1, fontFamily: F.body }}>Create</span>
-          </button>
-        );
-        const handleClick = () => {
-          if (navigator.vibrate) navigator.vibrate(8);
-          if (n.id === "notifications" && onNotifClick) { onNotifClick(); return; }
-          navigate(n.path);
-        };
         return (
-          <button key={n.id} onClick={handleClick} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52, transition: "color 0.2s", position: "relative" }}>
+          <button
+            key={n.id}
+            onClick={() => {
+              if (navigator.vibrate) navigator.vibrate(8);
+              if (n.id === "notifications" && onNotifClick) { onNotifClick(); return; }
+              navigate(n.path);
+            }}
+            style={{ flex: 1, background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, transition: "color 0.2s", position: "relative", padding: "0 0 0" }}
+          >
             <div className={isActive ? "nav-active-icon" : ""} style={{ display: "flex", position: "relative" }}>
               <n.Icon a={isActive} />
               {n.badge > 0 && (

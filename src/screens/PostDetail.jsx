@@ -34,6 +34,7 @@ export default function PostDetail() {
   const [activePhoto, setActivePhoto] = useState(0);
   const photoScrollRef = useRef(null);
   const [replyFocused, setReplyFocused] = useState(false);
+  const lastCommentRef = useRef(0); // rate-limit: tracks last comment timestamp
 
   useEffect(() => {
     if (!post) fetchPost();
@@ -160,11 +161,18 @@ export default function PostDetail() {
 
   const submitReply = async () => {
     if (!replyText.trim() || !user || loading) return;
+    // Rate limit: 10 seconds between comments
+    const now = Date.now();
+    if (now - lastCommentRef.current < 10_000) {
+      toast("Please wait a moment before posting again.", "info");
+      return;
+    }
     setLoading(true);
     const text = replyText.trim(); // Save before clearing
     try {
       const { error } = await supabase.from("comments").insert({ post_id: id, author_id: user.id, text });
       if (error) throw error;
+      lastCommentRef.current = Date.now();
       setReplyText(""); // Clear only after success
       setReplyFocused(false);
       setPost(p => p ? { ...p, comments: (p.comments || 0) + 1 } : p);
@@ -246,9 +254,11 @@ export default function PostDetail() {
     }
   };
 
+  const goBack = () => location.key !== "default" ? navigate(-1) : navigate("/feed");
+
   if (!post) return (
     <PhoneFrame>
-      <Header title="" onBack={() => navigate(-1)} />
+      <Header title="" onBack={goBack} />
       <div style={{ flex: 1, padding: 16 }}>
         <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
           <Skeleton width={48} height={48} style={{ borderRadius: "50%", flexShrink: 0 }} />
@@ -280,7 +290,7 @@ export default function PostDetail() {
 
   return (
     <PhoneFrame>
-      <Header title="" onBack={() => navigate(-1)} right={
+      <Header title="" onBack={goBack} right={
         <button onClick={() => setMenuOpen(true)} style={{ background: "none", border: "none", color: C.text2, cursor: "pointer", display: "flex", padding: 4 }}><Ics.More /></button>
       } />
 
@@ -337,11 +347,21 @@ export default function PostDetail() {
           {post.photos?.length > 0 && (
             <>
               <div ref={photoScrollRef} onScroll={e => setActivePhoto(Math.round(e.target.scrollLeft / 208))} style={{ display: "flex", gap: 8, overflowX: "auto", marginBottom: post.photos.length > 1 ? 8 : 14, scrollSnapType: "x mandatory", scrollbarWidth: "none" }}>
-                {post.photos.map((url, i) => (
-                  <div key={i} onClick={() => setLightboxSrc(url)} style={{ minWidth: post.photos.length === 1 ? "100%" : 200, height: 220, borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0, cursor: "zoom-in", scrollSnapAlign: "start" }}>
-                    <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </div>
-                ))}
+                {post.photos.map((url, i) => {
+                  const isVid = url.startsWith("video::");
+                  const mediaUrl = isVid ? url.slice(7) : url;
+                  return (
+                    <div key={i} style={{ minWidth: post.photos.length === 1 ? "100%" : 200, height: 220, borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0, scrollSnapAlign: "start" }}>
+                      {isVid ? (
+                        <video src={mediaUrl} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover", background: "#000" }} />
+                      ) : (
+                        <div onClick={() => setLightboxSrc(mediaUrl)} style={{ width: "100%", height: "100%", cursor: "zoom-in" }}>
+                          <img src={mediaUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               {post.photos.length > 1 && (
                 <div style={{ display: "flex", justifyContent: "center", gap: 5, marginBottom: 14 }}>

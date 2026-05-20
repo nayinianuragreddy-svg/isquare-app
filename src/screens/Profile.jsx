@@ -19,6 +19,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [stats, setStats] = useState({ raised: 0, resolved: 0, isquared: 0 });
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -148,7 +149,7 @@ export default function Profile() {
           { icon: Ics.Info, text: "About i²", action: () => setSettingsSheet("about") },
           { icon: Ics.File, text: "Terms & Privacy", action: () => setSettingsSheet("terms") },
           { icon: Ics.Shield, text: "Security", action: () => setSettingsSheet("security") },
-          { icon: Ics.Logout, text: "Logout", red: true, action: handleLogout },
+          { icon: Ics.Logout, text: "Logout", red: true, action: () => setLogoutConfirm(true) },
         ].map((item, i, arr) => (
           <div key={i} onClick={item.action} className="pressable" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14, color: item.red ? C.red : C.text, fontSize: 15, fontWeight: 500, fontFamily: F.body }}>
@@ -213,6 +214,19 @@ export default function Profile() {
           </>
         )}
       </BottomSheet>
+      {/* Logout confirmation */}
+      {logoutConfirm && (
+        <div onClick={() => setLogoutConfirm(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s", padding: "0 24px" }}>
+          <div onClick={e => e.stopPropagation()} className="scale-in" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 16, padding: "24px 20px", width: "100%", maxWidth: 320 }}>
+            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, fontFamily: F.body }}>Log out?</div>
+            <div style={{ fontSize: 14, color: C.text2, marginBottom: 24, lineHeight: 1.5, fontFamily: F.body }}>You'll need to verify your phone number again to log back in.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setLogoutConfirm(false)} style={{ flex: 1, padding: "13px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Stay</button>
+              <button onClick={handleLogout} style={{ flex: 1, padding: "13px", borderRadius: 10, background: C.red, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Log out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </PhoneFrame>
   );
 }

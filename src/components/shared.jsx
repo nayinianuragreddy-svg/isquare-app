@@ -24,11 +24,11 @@ export const Btn = ({ children, onClick, disabled, variant = "primary", style: s
   );
 };
 
-export const Input = ({ label, placeholder, value, onChange, disabled, type = "text", right, error }) => (
+export const Input = ({ label, placeholder, value, onChange, disabled, type = "text", right, error, ...rest }) => (
   <div style={{ marginBottom: 20 }}>
     {label && <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>{label}</label>}
     <div className={disabled ? "" : "input-focus-glow"} style={{ display: "flex", alignItems: "center", border: `1px solid ${error ? C.red : C.border}`, borderRadius: 10, overflow: "hidden", background: C.surface2 }}>
-      <input type={type} placeholder={placeholder} value={value} onChange={onChange} disabled={disabled} style={{ flex: 1, padding: "14px", background: "transparent", border: "none", color: disabled ? C.text2 : C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
+      <input type={type} placeholder={placeholder} value={value} onChange={onChange} disabled={disabled} {...rest} style={{ flex: 1, padding: "14px", background: "transparent", border: "none", color: disabled ? C.text2 : C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
       {right && <div style={{ padding: "0 14px", color: C.text2 }}>{right}</div>}
     </div>
     {error && <div style={{ color: C.red, fontSize: 12, marginTop: 4, fontFamily: F.body }}>{error}</div>}

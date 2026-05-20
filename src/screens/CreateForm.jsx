@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -51,37 +51,13 @@ export default function CreateForm() {
   const [gpsLoading, setGpsLoading] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
   const canSubmit = form.desc.trim() && form.area.trim() && form.cat;
 
   const handleBack = () => {
     if (form.desc.trim() || form.area.trim()) setConfirmDiscard(true);
     else navigate(-1);
   };
-
-  const handlePhotoSelect = async (e) => {
-    const files = Array.from(e.target.files).slice(0, 3 - photos.length);
-    if (!files.length || !user) return;
-    setUploading(true);
-    const urls = [];
-    for (const file of files) {
-      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-      const path = `${user.id}/${Date.now()}-${safeName}`;
-      try {
-        const { error } = await supabase.storage.from("post-images").upload(path, file, { upsert: false });
-        if (!error) {
-          const { data } = supabase.storage.from("post-images").getPublicUrl(path);
-          urls.push(data.publicUrl);
-        }
-      } catch (err) {
-        toast("Photo upload failed", "error");
-      }
-    }
-    setPhotos(prev => [...prev, ...urls].slice(0, 3));
-    setUploading(false);
-    e.target.value = "";
-  };
-
-  const removePhoto = (idx) => setPhotos(prev => prev.filter((_, i) => i !== idx));
 
   const getLocation = () => {
     if (!navigator.geolocation) {
@@ -113,6 +89,48 @@ export default function CreateForm() {
       { timeout: 8000, enableHighAccuracy: true }
     );
   };
+
+  // Auto-trigger GPS on mount
+  useEffect(() => { getLocation(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePhotoSelect = async (e) => {
+    const files = Array.from(e.target.files).slice(0, 3 - photos.length);
+    if (!files.length || !user) return;
+
+    // Validate file sizes before upload
+    const MAX_IMAGE = 8 * 1024 * 1024;  // 8 MB
+    const MAX_VIDEO = 30 * 1024 * 1024; // 30 MB
+    for (const file of files) {
+      const isVid = file.type.startsWith("video/");
+      if (file.size > (isVid ? MAX_VIDEO : MAX_IMAGE)) {
+        toast(`${isVid ? "Videos" : "Images"} must be under ${isVid ? "30 MB" : "8 MB"}.`, "error");
+        e.target.value = "";
+        return;
+      }
+    }
+
+    setUploading(true);
+    const urls = [];
+    for (const file of files) {
+      const isVid = file.type.startsWith("video/");
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const path = `${user.id}/${Date.now()}-${safeName}`;
+      try {
+        const { error } = await supabase.storage.from("post-images").upload(path, file, { upsert: false });
+        if (!error) {
+          const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+          urls.push(isVid ? "video::" + data.publicUrl : data.publicUrl);
+        }
+      } catch {
+        toast(`${isVid ? "Video" : "Photo"} upload failed`, "error");
+      }
+    }
+    setPhotos(prev => [...prev, ...urls].slice(0, 3));
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const removePhoto = (idx) => setPhotos(prev => prev.filter((_, i) => i !== idx));
 
   const handleSubmit = async () => {
     if (!canSubmit || !user) return;
@@ -160,7 +178,7 @@ export default function CreateForm() {
         <div style={{ textAlign: "right", fontSize: 11, color: form.desc.length > 450 ? C.amber : C.text3, marginBottom: 16, fontFamily: F.body }}>{form.desc.length}/500</div>
 
         <div style={{ position: "relative" }}>
-          <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} right={<Ics.Pin />} />
+          <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} maxLength={120} right={<Ics.Pin />} />
           <button onClick={getLocation} type="button" style={{ position: "absolute", right: 42, top: 36, background: "none", border: "none", padding: "4px 8px", cursor: "pointer", fontSize: 11, color: coords ? C.green : C.purple, fontWeight: 700, fontFamily: F.body }}>
             {gpsLoading ? "locating..." : coords ? "✓ GPS" : "Use GPS"}
           </button>
@@ -190,15 +208,25 @@ export default function CreateForm() {
 
         {/* Photo upload */}
         <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>
-          Add Photos <span style={{ color: C.text2, fontWeight: 400 }}>(optional · up to 3)</span>
+          Add Photos / Video <span style={{ color: C.text2, fontWeight: 400 }}>(optional · up to 3 · images 8 MB · videos 30 MB)</span>
         </label>
         <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          {photos.map((url, i) => (
-            <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0 }}>
-              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>×</button>
-            </div>
-          ))}
+          {photos.map((url, i) => {
+            const isVid = url.startsWith("video::");
+            return (
+              <div key={i} style={{ position: "relative", width: 80, height: 80, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0 }}>
+                {isVid ? (
+                  <div style={{ width: "100%", height: "100%", background: C.surface3, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: C.purple, gap: 4 }}>
+                    <Ics.Video />
+                    <span style={{ fontSize: 9, fontFamily: F.body, color: C.text2 }}>Video</span>
+                  </div>
+                ) : (
+                  <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                )}
+                <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.7)", border: "none", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, lineHeight: 1 }}>×</button>
+              </div>
+            );
+          })}
           {photos.length < 3 && (
             <div onClick={() => fileInputRef.current?.click()} style={{ width: 80, height: 80, border: `1.5px dashed ${uploading ? C.purple : C.border}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: uploading ? C.purple : C.text2, cursor: "pointer", background: C.surface2, transition: "all 0.2s" }}>
               {uploading ? (
@@ -211,7 +239,7 @@ export default function CreateForm() {
               )}
             </div>
           )}
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
+          <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
         </div>
 
         {postType === "public" ? (
@@ -235,7 +263,7 @@ export default function CreateForm() {
           </div>
         )}
 
-        <Btn disabled={!canSubmit || uploading} loading={loading} onClick={handleSubmit}>
+        <Btn disabled={!canSubmit || uploading || loading} loading={loading} onClick={handleSubmit}>
           {postType === "public" ? "Speak Up" : "Send Request"}
         </Btn>
         <div style={{ height: 20 }} />

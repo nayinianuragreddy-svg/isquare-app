@@ -183,7 +183,7 @@ export default function Registration() {
               <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Date of Birth *</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {[{ p: "DD", k: "dd", m: 2 }, { p: "MM", k: "mm", m: 2 }, { p: "YYYY", k: "yyyy", m: 4 }].map(f => (
-                  <input key={f.k} placeholder={f.p} value={form.dob[f.k]} onChange={e => set("dob", { ...form.dob, [f.k]: e.target.value.replace(/\D/g, "") })} maxLength={f.m} style={{ flex: f.k === "yyyy" ? 2 : 1, padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", textAlign: "center", fontFamily: F.body }} />
+                  <input key={f.k} placeholder={f.p} value={form.dob[f.k]} onChange={e => set("dob", { ...form.dob, [f.k]: e.target.value.replace(/\D/g, "") })} maxLength={f.m} type="tel" inputMode="numeric" style={{ flex: f.k === "yyyy" ? 2 : 1, padding: "11px 6px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 15, fontWeight: 600, outline: "none", textAlign: "center", fontFamily: F.body }} />
                 ))}
               </div>
               {form.dob.dd && form.dob.mm && form.dob.yyyy?.length === 4 && !dobValid() && (
