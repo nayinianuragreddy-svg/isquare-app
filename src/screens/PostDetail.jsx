@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -9,6 +9,7 @@ import { C, F } from "../constants/theme";
 import { toast } from "../lib/toast";
 
 const STATUS_STEPS = ["Open", "Pending", "In Progress", "Resolved"];
+const CAT_ICON = { Water: "💧", Roads: "🛣️", Electricity: "⚡", Sanitation: "🗑️", Parks: "🌳", Traffic: "🚦", Safety: "🔒", Drainage: "🌊", Waste: "♻️", Noise: "📢", "Public Property": "🏛️", Other: "📌" };
 
 export default function PostDetail() {
   const navigate = useNavigate();
@@ -29,6 +30,9 @@ export default function PostDetail() {
   const [editMode, setEditMode] = useState(false);
   const [editDesc, setEditDesc] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [activePhoto, setActivePhoto] = useState(0);
+  const photoScrollRef = useRef(null);
+  const [replyFocused, setReplyFocused] = useState(false);
 
   useEffect(() => {
     if (!post) fetchPost();
@@ -240,7 +244,7 @@ export default function PostDetail() {
         {/* Post content */}
         <div style={{ padding: "16px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
-            <Avatar name={post.author} size={48} src={post.avatar_url} />
+            <Avatar name={post.author} size={48} src={post.avatar_url} verified={post.verified} />
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                 <span style={{ fontWeight: 700, fontSize: 15, fontFamily: F.body }}>{post.author}</span>
@@ -255,7 +259,7 @@ export default function PostDetail() {
 
           <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
             <SeverityTag level={post.severity} />
-            <span style={{ padding: "2px 8px", borderRadius: 4, background: C.surface3, color: C.text2, fontSize: 11, fontWeight: 600, fontFamily: F.body }}>{post.cat}</span>
+            <span style={{ padding: "2px 8px", borderRadius: 4, background: C.surface3, color: C.text2, fontSize: 11, fontWeight: 600, fontFamily: F.body }}>{CAT_ICON[post.cat] ? `${CAT_ICON[post.cat]} ` : ""}{post.cat}</span>
             <StatusBadge status={post.status} />
           </div>
 
@@ -272,13 +276,22 @@ export default function PostDetail() {
           )}
 
           {post.photos?.length > 0 && (
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", marginBottom: 14 }}>
-              {post.photos.map((url, i) => (
-                <div key={i} onClick={() => setLightboxSrc(url)} style={{ minWidth: post.photos.length === 1 ? "100%" : 200, height: 220, borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0, cursor: "zoom-in" }}>
-                  <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <>
+              <div ref={photoScrollRef} onScroll={e => setActivePhoto(Math.round(e.target.scrollLeft / 208))} style={{ display: "flex", gap: 8, overflowX: "auto", marginBottom: post.photos.length > 1 ? 8 : 14, scrollSnapType: "x mandatory", scrollbarWidth: "none" }}>
+                {post.photos.map((url, i) => (
+                  <div key={i} onClick={() => setLightboxSrc(url)} style={{ minWidth: post.photos.length === 1 ? "100%" : 200, height: 220, borderRadius: 14, overflow: "hidden", border: `1px solid ${C.border}`, flexShrink: 0, cursor: "zoom-in", scrollSnapAlign: "start" }}>
+                    <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                ))}
+              </div>
+              {post.photos.length > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", gap: 5, marginBottom: 14 }}>
+                  {post.photos.map((_, i) => (
+                    <div key={i} style={{ width: activePhoto === i ? 18 : 6, height: 6, borderRadius: 3, background: activePhoto === i ? C.purple : C.surface3, transition: "width 0.3s cubic-bezier(0.22, 1, 0.36, 1)" }} />
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
@@ -303,11 +316,11 @@ export default function PostDetail() {
               return (
                 <div key={step} style={{ display: "flex", alignItems: "center", flex: i < STATUS_STEPS.length - 1 ? 1 : "none" }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: active ? 14 : 12, height: active ? 14 : 12, borderRadius: "50%", background: done ? C.purple : C.surface3, border: `2px solid ${done ? C.purple : C.border}`, boxShadow: active ? `0 0 0 4px ${C.purple}25` : "none", transition: "all 0.3s" }} />
+                    <div className={active ? "status-dot-active" : ""} style={{ width: active ? 14 : 12, height: active ? 14 : 12, borderRadius: "50%", background: done ? C.purple : C.surface3, border: `2px solid ${done ? C.purple : C.border}`, transition: "all 0.3s" }} />
                     <span style={{ fontSize: 10, fontWeight: done ? 700 : 400, color: done ? C.text : C.text3, fontFamily: F.body, whiteSpace: "nowrap" }}>{step}</span>
                   </div>
                   {i < STATUS_STEPS.length - 1 && (
-                    <div style={{ flex: 1, height: 2, background: i < statusIdx ? C.purple : C.surface3, marginBottom: 16, marginLeft: 4, marginRight: 4, transition: "background 0.3s" }} />
+                    <div style={{ flex: 1, height: 2, background: i < statusIdx ? C.purple : C.surface3, marginBottom: 16, marginLeft: 4, marginRight: 4, transformOrigin: "left center", animation: i < statusIdx ? `growLine 0.5s cubic-bezier(0.22, 1, 0.36, 1) ${i * 150}ms both` : "none" }} />
                   )}
                 </div>
               );
@@ -319,11 +332,44 @@ export default function PostDetail() {
         <div id="replies-section" style={{ padding: "16px" }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 16px", fontFamily: F.body }}>Replies ({comments.length})</h3>
 
-          <div style={{ display: "flex", alignItems: "center", border: `1px solid ${C.border}`, borderRadius: 24, padding: "8px 14px", marginBottom: 20, gap: 10, background: C.surface2 }}>
-            <input placeholder="Add your reply..." value={replyText} onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === "Enter" && submitReply()} style={{ flex: 1, background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
-            <button onClick={submitReply} disabled={!replyText.trim() || loading} style={{ background: replyText.trim() ? C.gradient : C.surface3, border: "none", color: C.text, cursor: replyText.trim() ? "pointer" : "default", width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", opacity: replyText.trim() ? 1 : 0.5, transition: "all 0.2s" }}>
-              <Ics.Send />
-            </button>
+          {/* Reply composer */}
+          <div style={{ marginBottom: 20, display: "flex", gap: 10, alignItems: replyFocused ? "flex-start" : "center" }}>
+            {replyFocused && <Avatar name={profile?.name} src={profile?.avatar_url} size={32} style={{ flexShrink: 0, marginTop: 8 }} />}
+            <div style={{ flex: 1 }}>
+              <div style={{ border: `1px solid ${replyFocused ? C.purple : C.border}`, borderRadius: replyFocused ? 14 : 24, padding: replyFocused ? "10px 14px" : "8px 14px", background: C.surface2, transition: "border-color 0.3s, border-radius 0.3s cubic-bezier(0.22,1,0.36,1)" }}>
+                {replyFocused ? (
+                  <textarea
+                    autoFocus
+                    placeholder="Add your reply..."
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value.slice(0, 280))}
+                    style={{ width: "100%", background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body, resize: "none", height: 56, display: "block", boxSizing: "border-box", animation: "replyExpand 0.2s ease-out" }}
+                  />
+                ) : (
+                  <input
+                    placeholder="Add your reply..."
+                    value={replyText}
+                    onFocus={() => setReplyFocused(true)}
+                    onChange={e => setReplyText(e.target.value)}
+                    style={{ width: "100%", background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body }}
+                  />
+                )}
+              </div>
+              {replyFocused && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 2px", animation: "replyExpand 0.2s ease-out" }}>
+                  <span style={{ fontSize: 11, color: replyText.length > 240 ? C.amber : C.text3, fontFamily: F.body }}>{replyText.length}/280</span>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { setReplyFocused(false); setReplyText(""); }} style={{ background: "none", border: "none", color: C.text2, fontSize: 13, cursor: "pointer", fontFamily: F.body, fontWeight: 600 }}>Cancel</button>
+                    <button onClick={submitReply} disabled={!replyText.trim() || loading} style={{ background: replyText.trim() ? C.gradient : C.surface3, border: "none", color: C.text, cursor: replyText.trim() ? "pointer" : "default", padding: "7px 18px", borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: F.body, opacity: replyText.trim() ? 1 : 0.5, transition: "all 0.2s" }}>Reply</button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {!replyFocused && (
+              <button onClick={() => setReplyFocused(true)} disabled={!replyText.trim() || loading} style={{ background: replyText.trim() ? C.gradient : C.surface3, border: "none", color: C.text, cursor: replyText.trim() ? "pointer" : "default", width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", opacity: replyText.trim() ? 1 : 0.5, transition: "all 0.2s", flexShrink: 0 }}>
+                <Ics.Send />
+              </button>
+            )}
           </div>
 
           {comments.length === 0 && (

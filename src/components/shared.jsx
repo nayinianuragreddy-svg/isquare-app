@@ -27,7 +27,7 @@ export const Btn = ({ children, onClick, disabled, variant = "primary", style: s
 export const Input = ({ label, placeholder, value, onChange, disabled, type = "text", right, error }) => (
   <div style={{ marginBottom: 20 }}>
     {label && <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>{label}</label>}
-    <div style={{ display: "flex", alignItems: "center", border: `1px solid ${error ? C.red : C.border}`, borderRadius: 10, overflow: "hidden", background: C.surface2 }}>
+    <div className={disabled ? "" : "input-focus-glow"} style={{ display: "flex", alignItems: "center", border: `1px solid ${error ? C.red : C.border}`, borderRadius: 10, overflow: "hidden", background: C.surface2 }}>
       <input type={type} placeholder={placeholder} value={value} onChange={onChange} disabled={disabled} style={{ flex: 1, padding: "14px", background: "transparent", border: "none", color: disabled ? C.text2 : C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
       {right && <div style={{ padding: "0 14px", color: C.text2 }}>{right}</div>}
     </div>
@@ -35,16 +35,25 @@ export const Input = ({ label, placeholder, value, onChange, disabled, type = "t
   </div>
 );
 
-export const Avatar = ({ name, size = 40, isOfficial = false, src }) => {
+export const Avatar = ({ name, size = 40, isOfficial = false, src, verified = false }) => {
   const palette = ["#7856FF", "#1D9BF0", "#00BA7C", "#FFB020", "#F04438", "#EC4899", "#14B8A6", "#F59E0B", "#8B5CF6", "#06B6D4"];
   const hash = (name || "?").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   const color = palette[hash % palette.length];
   const bgStyle = isOfficial ? `linear-gradient(135deg, ${C.purple}40, ${C.accent}40)` : `linear-gradient(135deg, ${color}55, ${color}25)`;
-  return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: bgStyle, border: isOfficial ? `2px solid ${C.purple}` : `1px solid ${color}60`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden", color: isOfficial ? C.purple : C.text }}>
-      {src ? <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isOfficial ? <Ics.Shield /> : <span style={{ fontSize: size * 0.4, fontWeight: 700 }}>{name?.[0]?.toUpperCase() || "?"}</span>}
+  const innerSize = verified ? size - 4 : size;
+  const inner = (
+    <div style={{ width: innerSize, height: innerSize, borderRadius: "50%", background: bgStyle, border: isOfficial ? `2px solid ${C.purple}` : verified ? "none" : `1px solid ${color}60`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", color: isOfficial ? C.purple : C.text }}>
+      {src ? <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : isOfficial ? <Ics.Shield /> : <span style={{ fontSize: innerSize * 0.4, fontWeight: 700 }}>{name?.[0]?.toUpperCase() || "?"}</span>}
     </div>
   );
+  if (verified) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg, #7856FF 0%, #1D9BF0 100%)", padding: 2, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {inner}
+      </div>
+    );
+  }
+  return <div style={{ width: size, height: size, flexShrink: 0 }}>{inner}</div>;
 };
 
 export const StatusBadge = ({ status }) => {

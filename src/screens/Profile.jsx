@@ -6,6 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Header, Btn, Input, BottomSheet } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { AnimatedNumber } from "../lib/useCountUp";
 import { toast } from "../lib/toast";
 
 export default function Profile() {
@@ -123,7 +124,7 @@ export default function Profile() {
         <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
           {[{ val: stats.raised, label: "Issues raised", color: C.text }, { val: stats.resolved, label: "Resolved", color: C.green }, { val: stats.isquared, label: "i² received", color: C.purple }].map((s, i) => (
             <div key={i} style={{ flex: 1, padding: "14px 10px", background: C.surface2, borderRadius: 12, border: `1px solid ${C.border}`, textAlign: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: F.body }}>{s.val}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: F.body }}><AnimatedNumber value={s.val} /></div>
               <div style={{ fontSize: 11, color: C.text2, marginTop: 2, fontFamily: F.body }}>{s.label}</div>
             </div>
           ))}
@@ -149,7 +150,7 @@ export default function Profile() {
           { icon: Ics.Shield, text: "Security", action: () => setSettingsSheet("security") },
           { icon: Ics.Logout, text: "Logout", red: true, action: handleLogout },
         ].map((item, i, arr) => (
-          <div key={i} onClick={item.action} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}>
+          <div key={i} onClick={item.action} className="pressable" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14, color: item.red ? C.red : C.text, fontSize: 15, fontWeight: 500, fontFamily: F.body }}>
               <div style={{ color: item.red ? C.red : C.text2 }}><item.icon /></div>
               {item.text}

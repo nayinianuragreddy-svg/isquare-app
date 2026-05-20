@@ -6,6 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Avatar, SeverityTag, I2Button, PostCardSkeleton, BottomSheet, Lightbox } from "../components/shared";
 import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { AnimatedNumber } from "../lib/useCountUp";
 import { toast } from "../lib/toast";
 
 export default function Feed() {
@@ -28,6 +29,7 @@ export default function Feed() {
   const touchStartY = useRef(0);
   const [pullDist, setPullDist] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const [newPostsCount, setNewPostsCount] = useState(0);
 
@@ -143,7 +145,7 @@ export default function Feed() {
   return (
     <PhoneFrame>
       {/* Header */}
-      <div style={{ padding: "10px 16px 0", borderBottom: `1px solid ${C.border}`, flexShrink: 0, position: "relative", zIndex: 50, background: C.bg }}>
+      <div className="glass-header" style={{ padding: "10px 16px 0", borderBottom: `1px solid ${C.border}`, flexShrink: 0, position: "relative", zIndex: 50 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
 
           {/* Profile + Brand */}
@@ -176,11 +178,13 @@ export default function Feed() {
           </div>
         </div>
 
-        {/* Search */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.surface2, borderRadius: 24, padding: "10px 16px", marginBottom: 12, border: `1px solid ${C.border}` }}>
-          <div style={{ color: C.text2 }}><Ics.Search /></div>
-          <input placeholder="Search issues, areas..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
-          {searchQuery && <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", color: C.text2, cursor: "pointer", display: "flex", padding: 0 }}><Ics.Close /></button>}
+        {/* Search — collapses on scroll */}
+        <div style={{ maxHeight: scrolled && !searchQuery ? 0 : 56, opacity: scrolled && !searchQuery ? 0 : 1, overflow: "hidden", marginBottom: scrolled && !searchQuery ? 0 : 12, transition: "max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s, margin-bottom 0.35s" }}>
+          <div className="input-focus-glow" style={{ display: "flex", alignItems: "center", gap: 10, background: C.surface2, borderRadius: 24, padding: "10px 16px", border: `1px solid ${C.border}` }}>
+            <div style={{ color: C.text2 }}><Ics.Search /></div>
+            <input placeholder="Search issues, areas..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
+            {searchQuery && <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", color: C.text2, cursor: "pointer", display: "flex", padding: 0 }}><Ics.Close /></button>}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -196,6 +200,7 @@ export default function Feed() {
 
       {/* Feed */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", overscrollBehavior: "none" }}
+        onScroll={e => setScrolled(e.target.scrollTop > 60)}
         onTouchStart={e => { if (scrollRef.current?.scrollTop === 0) touchStartY.current = e.touches[0].clientY; }}
         onTouchMove={e => { if (!touchStartY.current) return; const d = e.touches[0].clientY - touchStartY.current; if (d > 0 && scrollRef.current?.scrollTop === 0) setPullDist(Math.min(d * 0.35, 70)); }}
         onTouchEnd={() => { if (pullDist > 45 && !refreshing) { setRefreshing(true); fetchPosts().then(() => setRefreshing(false)); toast("Feed refreshed"); } setPullDist(0); touchStartY.current = 0; }}>
@@ -203,7 +208,9 @@ export default function Feed() {
         {/* Pull to refresh */}
         {(pullDist > 0 || refreshing) && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: refreshing ? 50 : pullDist, overflow: "hidden", transition: pullDist > 0 ? "none" : "height 0.3s" }}>
-            <div style={{ width: 24, height: 24, border: `2px solid ${C.purple}`, borderTop: `2px solid transparent`, borderRadius: "50%", animation: refreshing ? "pullSpin 0.6s linear infinite" : "none", transform: !refreshing ? `rotate(${pullDist * 4}deg)` : undefined, opacity: Math.min(pullDist / 50, 1) }} />
+            <div style={{ opacity: Math.min((pullDist || (refreshing ? 45 : 0)) / 45, 1), transform: refreshing ? "scale(1)" : `scale(${Math.min(pullDist / 60, 1)})`, animation: refreshing ? "pulse1 1s ease-in-out infinite" : "none", transition: refreshing ? "opacity 0.2s" : "none" }}>
+              <I2Logo size={26} />
+            </div>
           </div>
         )}
 
@@ -216,9 +223,9 @@ export default function Feed() {
                 <div style={{ position: "relative" }}>
                   <div style={{ fontSize: 10, color: C.text2, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>{residenceName}</div>
                   <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
-                    {[{ val: areaStats.open, label: "Open\nissues", color: C.text }, { val: areaStats.resolved, label: "Resolved", color: C.green }, { val: fmt(totalSignals), label: "i²\nsignals", color: C.purple }].map((stat, i) => (
+                    {[{ val: areaStats.open, label: "Open\nissues", color: C.text }, { val: areaStats.resolved, label: "Resolved", color: C.green }, { val: totalSignals, label: "i²\nsignals", color: C.purple, format: fmt }].map((stat, i) => (
                       <div key={i} style={{ flex: 1, ...(i > 0 ? { borderLeft: `1px solid ${C.border}`, paddingLeft: 10 } : {}) }}>
-                        <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, color: stat.color, fontFamily: F.body }}>{stat.val}</div>
+                        <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1, color: stat.color, fontFamily: F.body }}><AnimatedNumber value={stat.val} format={stat.format} /></div>
                         <div style={{ fontSize: 10, color: C.text2, fontWeight: 600, marginTop: 4, lineHeight: 1.2, fontFamily: F.body, whiteSpace: "pre-line" }}>{stat.label}</div>
                       </div>
                     ))}
@@ -255,8 +262,8 @@ export default function Feed() {
                 <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, marginBottom: 20, maxWidth: 260, margin: "0 auto 20px" }}>Be the first to raise a civic issue. One voice starts the movement.</div>
                 <button onClick={() => setCreateModalOpen(true)} style={{ padding: "12px 28px", borderRadius: 24, background: C.gradient, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.3)" }}>Speak Up</button>
               </div>
-            ) : filteredPosts.map((p) => (
-              <PostCard key={p.id} p={{ ...p, _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} />
+            ) : filteredPosts.map((p, idx) => (
+              <PostCard key={p.id} p={{ ...p, _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} listIndex={idx} />
             ))}
           </>
         )}
@@ -303,15 +310,37 @@ export default function Feed() {
   );
 }
 
+const CAT_ICON = { Water: "💧", Roads: "🛣️", Electricity: "⚡", Sanitation: "🗑️", Parks: "🌳", Traffic: "🚦", Safety: "🔒", Drainage: "🌊", Waste: "♻️", Noise: "📢", "Public Property": "🏛️", Other: "📌" };
+
 /* ── Streamlined Post Card ── */
-function PostCard({ p, onClick, onSupport, supported }) {
+const MILESTONES = [10, 25, 50, 100, 200];
+const CONFETTI_PARTS = [
+  { x: -28, y: -28, c: "#7856FF", s: 10, d: 0 },   { x: -8,  y: -38, c: "#1D9BF0", s:  8, d: 0.06 },
+  { x:  16, y: -34, c: "#FFB020", s: 12, d: 0.03 }, { x:  34, y: -18, c: "#00BA7C", s:  8, d: 0.09 },
+  { x:  40, y:   4, c: "#7856FF", s: 10, d: 0.12 }, { x:  32, y:  24, c: "#EC4899", s:  8, d: 0.07 },
+  { x:  10, y:  34, c: "#1D9BF0", s: 10, d: 0.15 }, { x: -14, y:  32, c: "#FFB020", s:  8, d: 0.04 },
+  { x: -32, y:  20, c: "#00BA7C", s: 12, d: 0.10 }, { x: -38, y:  -2, c: "#EC4899", s:  8, d: 0.08 },
+  { x:   2, y: -42, c: "#7856FF", s:  7, d: 0.13 }, { x:  26, y: -10, c: "#FFB020", s:  9, d: 0.02 },
+];
+
+function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
   const [sparks, setSparks] = useState(false);
+  const [confetti, setConfetti] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const handleSupport = (e) => {
     e.stopPropagation();
-    if (!supported) { setSparks(true); setTimeout(() => setSparks(false), 600); }
+    if (!supported) {
+      setSparks(true);
+      setTimeout(() => setSparks(false), 700);
+      if (MILESTONES.includes(p.agree + 1)) {
+        setConfetti(true);
+        setTimeout(() => setConfetti(false), 1000);
+        toast(`🎉 ${p.agree + 1} voices united!`, "success");
+      }
+    }
+    if (navigator.vibrate) navigator.vibrate(12);
     onSupport();
   };
 
@@ -326,8 +355,8 @@ function PostCard({ p, onClick, onSupport, supported }) {
   };
 
   return (
-    <article onClick={onClick} className={heatClass} style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", display: "flex", gap: 12, position: "relative", transition: "border-color 0.3s", borderLeft: isCritical ? `3px solid ${C.critical}` : "3px solid transparent" }}>
-      <Avatar name={p.author} src={p.avatar_url} />
+    <article onClick={onClick} className={`pressable${heatClass ? ` ${heatClass}` : ""}`} style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", display: "flex", gap: 12, position: "relative", borderLeft: isCritical ? `3px solid ${C.critical}` : "3px solid transparent", animation: `listIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) ${Math.min(listIndex * 50, 300)}ms both` }}>
+      <Avatar name={p.author} src={p.avatar_url} verified={p.verified} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Name line: Author · time */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
@@ -346,7 +375,7 @@ function PostCard({ p, onClick, onSupport, supported }) {
           </span>
           <span style={{ color: C.text3 }}>·</span>
           <SeverityTag level={p.severity} blink={isCritical} />
-          <span style={{ padding: "2px 7px", borderRadius: 4, background: C.surface3, color: C.text2, fontSize: 10, fontWeight: 600, fontFamily: F.body }}>{p.cat}</span>
+          <span style={{ padding: "2px 7px", borderRadius: 4, background: C.surface3, color: C.text2, fontSize: 10, fontWeight: 600, fontFamily: F.body }}>{CAT_ICON[p.cat] ? `${CAT_ICON[p.cat]} ` : ""}{p.cat}</span>
         </div>
 
         {/* Description — capped at 3 lines */}
@@ -364,10 +393,19 @@ function PostCard({ p, onClick, onSupport, supported }) {
         <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <div style={{ position: "relative" }}>
             <I2Button active={supported} count={p.agree} onClick={handleSupport} />
-            {sparks && [0, 1, 2].map(i => (
-              <div key={i} style={{ position: "absolute", top: 0, left: 12 + i * 8, pointerEvents: "none", color: i === 0 ? C.purple : i === 1 ? C.accent : C.amber, animation: `sparkle 0.6s ease-out ${i * 0.1}s forwards` }}>
-                <Ics.Spark size={10 + i * 2} />
+            {sparks && !confetti && [
+              { x: -6, y: -10, color: C.purple, size: 12, delay: 0 },
+              { x: 8,  y: -14, color: C.accent, size: 10, delay: 0.05 },
+              { x: 20, y: -8,  color: C.amber,  size: 14, delay: 0.1 },
+              { x: -4, y: 4,   color: C.purple, size: 8,  delay: 0.07 },
+              { x: 22, y: 6,   color: C.green,  size: 10, delay: 0.13 },
+            ].map((s, i) => (
+              <div key={i} style={{ position: "absolute", top: s.y, left: s.x, pointerEvents: "none", color: s.color, animation: `sparkle 0.7s ease-out ${s.delay}s forwards` }}>
+                <Ics.Spark size={s.size} />
               </div>
+            ))}
+            {confetti && CONFETTI_PARTS.map((cp, i) => (
+              <div key={i} style={{ position: "absolute", top: cp.y, left: cp.x, width: cp.s, height: cp.s, borderRadius: i % 3 === 0 ? "50%" : 2, background: cp.c, animation: `confettiBurst 0.9s ease-out ${cp.d}s forwards`, pointerEvents: "none" }} />
             ))}
           </div>
           {heatIcon && <span style={{ fontSize: 14 }}>{heatIcon}</span>}
@@ -400,7 +438,7 @@ function PostCard({ p, onClick, onSupport, supported }) {
 function BottomNav({ active, unreadCount = 0, onCreateClick }) {
   const navigate = useNavigate();
   return (
-    <div style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, background: "rgba(10,10,15,0.95)", backdropFilter: "blur(20px)", flexShrink: 0 }}>
+    <div className="glass-nav" style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
       {[{ id: "feed", label: "Home", Icon: Ics.Home, path: "/feed" },
         { id: "notifications", label: "Alerts", Icon: Ics.Bell, path: "/notifications", badge: unreadCount },
         { id: "create", label: "Create", isCreate: true },

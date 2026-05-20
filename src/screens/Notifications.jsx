@@ -5,9 +5,26 @@ import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
 import { Header } from "../components/shared";
 import { C, F } from "../constants/theme";
+import { I2Logo } from "../components/icons";
 import { toast } from "../lib/toast";
 
-const TYPE_ICON = { vote: "🔥", comment: "💬", status_change: "✅", default: "📢" };
+const TYPE_ICON = { vote: "🔥", comment: "💬", status_change: "✅", merge_accepted: "🤝", default: "📢" };
+
+function groupByDate(notifs) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const weekAgo = new Date(today.getTime() - 7 * 86400000);
+  const groups = { Today: [], Yesterday: [], "This Week": [], Earlier: [] };
+  notifs.forEach(n => {
+    const d = new Date(n.created_at);
+    if (d >= today) groups.Today.push(n);
+    else if (d >= yesterday) groups.Yesterday.push(n);
+    else if (d >= weekAgo) groups["This Week"].push(n);
+    else groups.Earlier.push(n);
+  });
+  return Object.entries(groups).filter(([, items]) => items.length > 0);
+}
 
 export default function Notifications() {
   const navigate = useNavigate();
@@ -65,7 +82,9 @@ export default function Notifications() {
         onTouchEnd={() => { if (pullDist > 45 && !refreshing) { setRefreshing(true); fetchNotifs().then(() => { setRefreshing(false); toast("Refreshed"); }); } setPullDist(0); touchStartY.current = 0; }}>
         {(pullDist > 0 || refreshing) && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: refreshing ? 50 : pullDist, overflow: "hidden", transition: pullDist > 0 ? "none" : "height 0.3s" }}>
-            <div style={{ width: 24, height: 24, border: `2px solid ${C.purple}`, borderTop: `2px solid transparent`, borderRadius: "50%", animation: refreshing ? "pullSpin 0.6s linear infinite" : "none", transform: !refreshing ? `rotate(${pullDist * 4}deg)` : undefined, opacity: Math.min(pullDist / 50, 1) }} />
+            <div style={{ opacity: Math.min((pullDist || (refreshing ? 45 : 0)) / 45, 1), transform: refreshing ? "scale(1)" : `scale(${Math.min(pullDist / 60, 1)})`, animation: refreshing ? "pulse1 1s ease-in-out infinite" : "none", transition: refreshing ? "opacity 0.2s" : "none" }}>
+              <I2Logo size={26} />
+            </div>
           </div>
         )}
         {loading ? (
@@ -90,26 +109,34 @@ export default function Notifications() {
           </div>
         ) : (
           <>
-            {notifs.map(n => (
-              <div
-                key={n.id}
-                onClick={() => n.post_id && navigate("/post/" + n.post_id)}
-                style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${C.border}`, background: !n.read ? `${C.purple}08` : "transparent", cursor: n.post_id ? "pointer" : "default" }}
-              >
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: C.surface2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                  {TYPE_ICON[n.type] || TYPE_ICON.default}
+            {groupByDate(notifs).map(([label, items]) => (
+              <div key={label}>
+                <div style={{ padding: "8px 16px 6px", fontSize: 11, fontWeight: 700, color: C.text2, textTransform: "uppercase", letterSpacing: 1.2, background: C.surface2, borderBottom: `1px solid ${C.border}`, fontFamily: F.body }}>
+                  {label}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2, gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: F.body }}>{n.title}</span>
-                    <span style={{ fontSize: 11, color: C.text2, flexShrink: 0, fontFamily: F.body }}>{timeAgo(n.created_at)}</span>
+                {items.map((n, idx) => (
+                  <div
+                    key={n.id}
+                    onClick={() => n.post_id && navigate("/post/" + n.post_id)}
+                    className="pressable"
+                    style={{ display: "flex", gap: 12, padding: "14px 16px", borderBottom: `1px solid ${C.border}`, background: !n.read ? `${C.purple}08` : "transparent", cursor: n.post_id ? "pointer" : "default", animation: `listIn 0.3s cubic-bezier(0.16,1,0.3,1) ${idx * 40}ms both` }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: C.surface3, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                      {TYPE_ICON[n.type] || TYPE_ICON.default}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2, gap: 8 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, fontFamily: F.body }}>{n.title}</span>
+                        <span style={{ fontSize: 11, color: C.text2, flexShrink: 0, fontFamily: F.body }}>{timeAgo(n.created_at)}</span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.4, fontFamily: F.body }}>{n.body}</p>
+                    </div>
+                    {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.purple, flexShrink: 0, marginTop: 6 }} />}
                   </div>
-                  <p style={{ margin: 0, fontSize: 13, color: C.text2, lineHeight: 1.4, fontFamily: F.body }}>{n.body}</p>
-                </div>
-                {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.purple, flexShrink: 0, marginTop: 6 }} />}
+                ))}
               </div>
             ))}
-            <div style={{ padding: "20px 16px", textAlign: "center", color: C.text3, fontSize: 12, fontFamily: F.body }}>You're all caught up</div>
+            <div style={{ padding: "20px 16px", textAlign: "center", color: C.text3, fontSize: 12, fontFamily: F.body }}>You're all caught up ✓</div>
           </>
         )}
       </div>

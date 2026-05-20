@@ -77,7 +77,9 @@ export default function MyVoice() {
         onTouchEnd={() => { if (pullDist > 45 && !refreshing) { setRefreshing(true); fetchMyPosts().then(() => { setRefreshing(false); toast("Refreshed"); }); } setPullDist(0); touchStartY.current = 0; }}>
         {(pullDist > 0 || refreshing) && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: refreshing ? 50 : pullDist, overflow: "hidden", transition: pullDist > 0 ? "none" : "height 0.3s" }}>
-            <div style={{ width: 24, height: 24, border: `2px solid ${C.purple}`, borderTop: `2px solid transparent`, borderRadius: "50%", animation: refreshing ? "pullSpin 0.6s linear infinite" : "none", transform: !refreshing ? `rotate(${pullDist * 4}deg)` : undefined, opacity: Math.min(pullDist / 50, 1) }} />
+            <div style={{ opacity: Math.min((pullDist || (refreshing ? 45 : 0)) / 45, 1), transform: refreshing ? "scale(1)" : `scale(${Math.min(pullDist / 60, 1)})`, animation: refreshing ? "pulse1 1s ease-in-out infinite" : "none", transition: refreshing ? "opacity 0.2s" : "none" }}>
+              <I2Logo size={26} />
+            </div>
           </div>
         )}
         {loading ? (
@@ -135,7 +137,7 @@ export default function MyVoice() {
 
 function BottomNavBar({ active, navigate, unreadCount = 0 }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, background: "rgba(10,10,15,0.95)", backdropFilter: "blur(20px)", flexShrink: 0 }}>
+    <div className="glass-nav" style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
       {[{ id: "feed", label: "Home", Icon: Ics.Home, path: "/feed" },
         { id: "notifications", label: "Alerts", Icon: Ics.Bell, path: "/notifications", badge: unreadCount },
         { id: "create", label: "Create", isCreate: true },

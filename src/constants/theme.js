@@ -24,6 +24,9 @@ export const F = {
   body: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 };
 
+/* ── spring easing used everywhere ── */
+export const SPRING = "cubic-bezier(0.22, 1, 0.36, 1)";
+
 export const STYLES = `
   @keyframes pulse1 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
   @keyframes pulse2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
@@ -55,6 +58,36 @@ export const STYLES = `
   @keyframes pullSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes countPop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 70% { transform: scale(0.9); } 100% { transform: scale(1); } }
   .count-pop { animation: countPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+  /* ── Phase 1: Premium micro-interactions ── */
+
+  /* 1. Card press states */
+  .pressable { transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+  .pressable:active { transform: scale(0.97); transition-duration: 0.12s; }
+
+  /* 2. Staggered list entrance */
+  @keyframes listIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes growLine { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes statusPulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(120,86,255,0.25); } 50% { box-shadow: 0 0 0 6px rgba(120,86,255,0.15); } }
+  .status-dot-active { animation: statusPulse 2s ease-in-out infinite; }
+  @keyframes confettiBurst { 0% { transform: scale(0) rotate(0deg); opacity: 0; } 30% { opacity: 1; } 60% { transform: scale(1.2) rotate(200deg); opacity: 1; } 100% { transform: scale(0) rotate(360deg); opacity: 0; } }
+  @keyframes replyExpand { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* 5. Branded pull-to-refresh logo spin */
+  @keyframes logoSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* Input focus glow */
+  @keyframes borderGlow {
+    0% { box-shadow: none; }
+    50% { box-shadow: 0 0 0 2px rgba(120,86,255,0.45), 0 0 14px rgba(120,86,255,0.2); }
+    100% { box-shadow: 0 0 0 2px rgba(120,86,255,0.3), 0 0 8px rgba(120,86,255,0.12); }
+  }
+  .input-focus-glow:focus-within { animation: borderGlow 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+  /* Glass surfaces */
+  .glass-nav { backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); background: rgba(10,10,15,0.72) !important; border-top: 1px solid rgba(255,255,255,0.04) !important; }
+  .glass-header { backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3); background: rgba(10,10,15,0.78) !important; }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; background: #050508; overscroll-behavior: none; }
   .skeleton { background: linear-gradient(90deg, #14141B 0%, #1F1F2A 50%, #14141B 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
