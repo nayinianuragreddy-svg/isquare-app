@@ -25,9 +25,15 @@ export function AuthProvider({ children }) {
   }, []);
 
   const fetchProfile = async (userId) => {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-    setProfile(data);
-    setLoading(false);
+    try {
+      const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+      setProfile(data || null);
+    } catch (e) {
+      console.error("fetchProfile error:", e);
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signIn = async () => {
