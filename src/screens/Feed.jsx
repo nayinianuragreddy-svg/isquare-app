@@ -449,8 +449,11 @@ function PostCard({ p, onClick, onSupport, onReport, supported, listIndex = 0 })
 
         {/* Area + tags */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-          <span style={{ color: C.text2, fontSize: 12, fontFamily: F.body, display: "flex", alignItems: "center", gap: 3 }}>
-            <Ics.Pin />{p.area || "Nearby"}
+          <span style={{ color: C.text2, fontSize: 12, fontFamily: F.body, display: "flex", alignItems: "center", gap: 3, maxWidth: 160, overflow: "hidden" }}>
+            <Ics.Pin />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {(p.area || "Nearby").split(",").slice(0, 2).join(", ")}
+            </span>
           </span>
           <span style={{ color: C.text3 }}>·</span>
           <SeverityTag level={p.severity} blink={isCritical} />

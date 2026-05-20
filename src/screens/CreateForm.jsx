@@ -25,9 +25,10 @@ async function reverseGeocode(lat, lng) {
     const a = data.address || {};
     const parts = [
       a.neighbourhood || a.suburb || a.quarter,
-      a.city_district || a.town || a.city || a.village,
+      a.town || a.city || a.village,
     ].filter(Boolean);
-    return parts.join(", ") || data.display_name?.split(",").slice(0, 2).join(",").trim() || "";
+    const result = parts.slice(0, 2).join(", ") || a.county || data.display_name?.split(",")[0]?.trim() || "";
+    return result.slice(0, 50); // cap at 50 chars
   } catch {
     return "";
   }

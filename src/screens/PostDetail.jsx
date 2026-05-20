@@ -321,7 +321,11 @@ export default function PostDetail() {
               </div>
               <div style={{ fontSize: 13, color: C.text2, fontFamily: F.body }}>@{post.handle}</div>
               <div style={{ display: "flex", gap: 8, fontSize: 12, color: C.text2, marginTop: 2, alignItems: "center", fontFamily: F.body }}>
-                <Ics.Pin /> <span>{post.area || "Nearby"}</span> · <span>{post.fullDate}</span>
+                <Ics.Pin />
+                <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {(post.area || "Nearby").split(",").slice(0, 2).join(", ")}
+                </span>
+                · <span>{post.fullDate}</span>
               </div>
             </div>
           </div>
