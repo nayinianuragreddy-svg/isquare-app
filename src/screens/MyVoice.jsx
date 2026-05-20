@@ -6,6 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { StatusBadge, SeverityTag, I2Button, PostCardSkeleton } from "../components/shared";
 import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { timeAgo } from "../lib/timeAgo";
 import { toast } from "../lib/toast";
 
 export default function MyVoice() {
@@ -28,7 +29,7 @@ export default function MyVoice() {
 
   const fetchMyPosts = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-    const { data } = await supabase.from("posts").select("*").eq("author_id", user.id).order("created_at", { ascending: false });
+    const { data } = await supabase.from("posts").select("*").eq("author_id", user.id).order("created_at", { ascending: false }).limit(50);
     const mapped = (data || []).map(p => ({
       id: p.id, cat: p.category, severity: p.severity, date: timeAgo(p.created_at),
       desc: p.description, status: p.status, type: p.type === "public" ? "Public" : "Private",
@@ -95,8 +96,8 @@ export default function MyVoice() {
                 )}
               </div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>{filter === "Public" ? "No issues raised yet" : "No requests sent yet"}</div>
-            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, marginBottom: 20, maxWidth: 260, margin: "0 auto 20px" }}>{filter === "Public" ? "Be the change. Raise an issue and your neighborhood will rally behind you." : "Reach your representative directly with a private request."}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>{filter === "Public" ? "Nothing raised yet." : "No requests sent yet."}</div>
+            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, marginBottom: 20, maxWidth: 260, margin: "0 auto 20px" }}>{filter === "Public" ? "Every movement starts with one person. Raise an issue and your neighborhood will rally behind it." : "Send a private, direct request to your MLA, MP, or Corporator — no middleman."}</div>
             <button onClick={() => navigate("/create", { state: { type: filter === "Public" ? "public" : "private" } })} style={{ padding: "12px 28px", borderRadius: 24, background: C.gradient, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.3)" }}>{filter === "Public" ? "Speak Up" : "Send Request"}</button>
           </div>
         ) : filtered.map((t, i) => (
@@ -169,10 +170,3 @@ function BottomNavBar({ active, navigate, unreadCount = 0 }) {
   );
 }
 
-function timeAgo(ts) {
-  const diff = (Date.now() - new Date(ts)) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-  return Math.floor(diff / 86400) + "d ago";
-}

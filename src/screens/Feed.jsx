@@ -7,7 +7,10 @@ import { Avatar, SeverityTag, I2Button, PostCardSkeleton, BottomSheet, Lightbox 
 import { Ics, I2Logo } from "../components/icons";
 import { C, F } from "../constants/theme";
 import { AnimatedNumber } from "../lib/useCountUp";
+import { timeAgo } from "../lib/timeAgo";
 import { toast } from "../lib/toast";
+
+const PAGE_SIZE = 20;
 
 export default function Feed() {
   const navigate = useNavigate();
@@ -37,36 +40,45 @@ export default function Feed() {
 
   const fetchPosts = useCallback(async () => {
     setPostsLoading(true);
-    const { data } = await supabase
-      .from("posts")
-      .select("*, profiles(name, username, verified, residence, avatar_url)")
-      .eq("type", "public")
-      .is("merged_into", null)
-      .order("created_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*, profiles(name, username, verified, residence, avatar_url)")
+        .eq("type", "public")
+        .is("merged_into", null)
+        .order("created_at", { ascending: false })
+        .limit(PAGE_SIZE);
 
-    const dbPosts = (data || []).map(p => ({
-      id: p.id,
-      cat: p.category,
-      severity: p.severity,
-      date: timeAgo(p.created_at),
-      fullDate: new Date(p.created_at).toLocaleDateString("en-IN"),
-      desc: p.description,
-      status: p.status,
-      agree: p.agree_count,
-      comments: p.comments_count,
-      type: "Public",
-      author: p.anonymous ? "Anonymous" : (p.profiles?.name || "Citizen"),
-      handle: p.anonymous ? "anonymous" : (p.profiles?.username || "citizen"),
-      verified: !p.anonymous && !!p.profiles?.verified,
-      avatar_url: p.anonymous ? null : (p.profiles?.avatar_url || null),
-      photos: p.photos || [],
-      area: p.area || "",
-      author_id: p.author_id,
-    }));
+      if (error) throw error;
 
-    setPosts(dbPosts);
-    setPostsLoading(false);
-    setNewPostsCount(0);
+      const dbPosts = (data || []).map(p => ({
+        id: p.id,
+        cat: p.category,
+        severity: p.severity,
+        date: timeAgo(p.created_at),
+        fullDate: new Date(p.created_at).toLocaleDateString("en-IN"),
+        desc: p.description,
+        status: p.status,
+        agree: p.agree_count,
+        comments: p.comments_count,
+        type: "Public",
+        author: p.anonymous ? "Anonymous" : (p.profiles?.name || "Citizen"),
+        handle: p.anonymous ? "anonymous" : (p.profiles?.username || "citizen"),
+        verified: !p.anonymous && !!p.profiles?.verified,
+        avatar_url: p.anonymous ? null : (p.profiles?.avatar_url || null),
+        photos: p.photos || [],
+        area: p.area || "",
+        author_id: p.author_id,
+      }));
+
+      setPosts(dbPosts);
+      setNewPostsCount(0);
+    } catch (e) {
+      console.error("Feed fetch error:", e);
+      toast("Couldn't load feed. Pull to retry.", "error");
+    } finally {
+      setPostsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -76,7 +88,20 @@ export default function Feed() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts", filter: "type=eq.public" }, () => {
         setNewPostsCount(n => n + 1);
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "posts" }, () => fetchPosts())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "posts" }, (payload) => {
+        // Targeted update — only update the changed post, no full reload
+        const updated = payload.new;
+        if (!updated) return;
+        setPosts(prev => prev.map(p => {
+          if (p.id !== updated.id) return p;
+          return {
+            ...p,
+            agree: updated.agree_count ?? p.agree,
+            comments: updated.comments_count ?? p.comments,
+            status: updated.status ?? p.status,
+          };
+        }));
+      })
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -108,14 +133,34 @@ export default function Feed() {
   const toggleSupport = async (postId) => {
     if (!user) return;
     const isSupported = supportedPosts[postId];
+    // Optimistic update
     setSupportedPosts(prev => ({ ...prev, [postId]: !isSupported }));
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, agree: p.agree + (isSupported ? -1 : 1) } : p));
 
-    if (isSupported) {
-      await supabase.from("votes").delete().eq("post_id", postId).eq("user_id", user.id);
-    } else {
-      toast("Your voice added");
-      await supabase.from("votes").insert({ post_id: postId, user_id: user.id });
+    try {
+      if (isSupported) {
+        const { error } = await supabase.from("votes").delete().eq("post_id", postId).eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        toast("Your voice added");
+        const { error } = await supabase.from("votes").insert({ post_id: postId, user_id: user.id });
+        if (error) throw error;
+      }
+    } catch (e) {
+      // Rollback on failure
+      setSupportedPosts(prev => ({ ...prev, [postId]: isSupported }));
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, agree: p.agree + (isSupported ? 1 : -1) } : p));
+      toast("Action failed. Try again.", "error");
+    }
+  };
+
+  const reportPost = async (postId) => {
+    if (!user) return;
+    try {
+      await supabase.from("reports").insert({ post_id: postId, reporter_id: user.id, reason: "Flagged by user" });
+      toast("Report submitted — we'll review it", "info");
+    } catch {
+      toast("Couldn't submit report. Try again.", "error");
     }
   };
 
@@ -156,7 +201,7 @@ export default function Feed() {
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: C.text2, fontFamily: F.body }}>Welcome back,</div>
+              <div style={{ fontSize: 11, color: C.text2, fontFamily: F.body }}>Good to see you,</div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 700, fontFamily: F.body }}>{profile?.name?.split(" ")[0] || "Citizen"}</span>
                 <I2Logo size={16} />
@@ -182,7 +227,7 @@ export default function Feed() {
         <div style={{ maxHeight: scrolled && !searchQuery ? 0 : 56, opacity: scrolled && !searchQuery ? 0 : 1, overflow: "hidden", marginBottom: scrolled && !searchQuery ? 0 : 12, transition: "max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s, margin-bottom 0.35s" }}>
           <div className="input-focus-glow" style={{ display: "flex", alignItems: "center", gap: 10, background: C.surface2, borderRadius: 24, padding: "10px 16px", border: `1px solid ${C.border}` }}>
             <div style={{ color: C.text2 }}><Ics.Search /></div>
-            <input placeholder="Search issues, areas..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
+            <input placeholder="Search issues, areas, categories..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ flex: 1, background: "none", border: "none", color: C.text, fontSize: 14, outline: "none", fontFamily: F.body }} />
             {searchQuery && <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", color: C.text2, cursor: "pointer", display: "flex", padding: 0 }}><Ics.Close /></button>}
           </div>
         </div>
@@ -254,16 +299,9 @@ export default function Feed() {
             {postsLoading ? (
               Array(4).fill(0).map((_, i) => <PostCardSkeleton key={i} />)
             ) : filteredPosts.length === 0 ? (
-              <div style={{ padding: "60px 24px", textAlign: "center" }}>
-                <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}20, ${C.accent}10)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", animation: "pulse1 3s ease-in-out infinite" }}>
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2" strokeLinecap="round"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>Your neighborhood is quiet</div>
-                <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, marginBottom: 20, maxWidth: 260, margin: "0 auto 20px" }}>Be the first to raise a civic issue. One voice starts the movement.</div>
-                <button onClick={() => setCreateModalOpen(true)} style={{ padding: "12px 28px", borderRadius: 24, background: C.gradient, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 4px 20px rgba(120,86,255,0.3)" }}>Speak Up</button>
-              </div>
+              <EmptyFeedState onSpeak={() => setCreateModalOpen(true)} />
             ) : filteredPosts.map((p, idx) => (
-              <PostCard key={p.id} p={{ ...p, _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} listIndex={idx} />
+              <PostCard key={p.id} p={{ ...p, _onLightbox: setLightboxSrc }} onClick={() => navigate("/post/" + p.id, { state: { post: p } })} supported={!!supportedPosts[p.id]} onSupport={() => toggleSupport(p.id)} onReport={() => reportPost(p.id)} listIndex={idx} />
             ))}
           </>
         )}
@@ -273,8 +311,8 @@ export default function Feed() {
             <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.accent}20, ${C.purple}10)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", animation: "pulse1 3s ease-in-out infinite" }}>
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>Representative updates</div>
-            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, maxWidth: 280, margin: "0 auto 16px" }}>Verified posts and polls from your elected officials will appear here once they join i².</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>Your rep, in your pocket.</div>
+            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, maxWidth: 280, margin: "0 auto 16px" }}>Official posts, polls, and updates from your elected representatives will appear here once they join i².</div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 20, background: C.accentDim, color: C.accent, fontSize: 12, fontWeight: 700, fontFamily: F.body }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
               Coming soon
@@ -283,16 +321,16 @@ export default function Feed() {
         )}
       </div>
 
-      <BottomNav active="feed" unreadCount={unreadCount} onCreateClick={() => setCreateModalOpen(true)} />
+      <BottomNav active="feed" unreadCount={unreadCount} onCreateClick={() => setCreateModalOpen(true)} onNotifClick={() => { setUnreadCount(0); navigate("/notifications"); }} />
 
       {/* Create modal */}
       <BottomSheet open={createModalOpen} onClose={() => setCreateModalOpen(false)}>
         <div style={{ padding: "0 0 16px" }}>
-          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: F.body }}>What do you want to do?</div>
-          <div style={{ fontSize: 13, color: C.text2, marginTop: 4, fontFamily: F.body }}>Choose how your message is shared</div>
+          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: F.body }}>What's on your mind?</div>
+          <div style={{ fontSize: 13, color: C.text2, marginTop: 4, fontFamily: F.body }}>Choose how to make your voice count</div>
         </div>
-        {[{ type: "public", Icon: () => <Ics.SpeakUp a={true} />, iconBg: C.purpleDim, iconColor: C.purple, title: "Speak Up", desc: "Share publicly — neighbors can support it with i².", example: "e.g. broken road, water leak, garbage pile" },
-          { type: "private", Icon: () => <Ics.Rep a={true} />, iconBg: "rgba(29,155,240,0.15)", iconColor: C.accent, title: "Personal Request", desc: "Private message to your MLA, MP, or Corporator.", example: "e.g. ration card, pension, certificate request" }].map(opt => (
+        {[{ type: "public", Icon: () => <Ics.SpeakUp a={true} />, iconBg: C.purpleDim, iconColor: C.purple, title: "Speak Up", desc: "Post publicly — your neighbors can rally behind it with i².", example: "e.g. broken road, water leak, overflowing garbage" },
+          { type: "private", Icon: () => <Ics.Rep a={true} />, iconBg: "rgba(29,155,240,0.15)", iconColor: C.accent, title: "Personal Request", desc: "A direct, private message to your MLA, MP, or Corporator.", example: "e.g. ration card, pension scheme, certificate request" }].map(opt => (
           <div key={opt.type} onClick={() => { setCreateModalOpen(false); navigate("/create", { state: { type: opt.type } }); }} style={{ display: "flex", gap: 12, padding: "16px 0", cursor: "pointer", borderTop: `1px solid ${C.border}` }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, background: opt.iconBg, display: "flex", alignItems: "center", justifyContent: "center", color: opt.iconColor, flexShrink: 0 }}><opt.Icon /></div>
             <div style={{ flex: 1 }}>
@@ -310,7 +348,30 @@ export default function Feed() {
   );
 }
 
-const CAT_ICON = { Water: "💧", Roads: "🛣️", Electricity: "⚡", Sanitation: "🗑️", Parks: "🌳", Traffic: "🚦", Safety: "🔒", Drainage: "🌊", Waste: "♻️", Noise: "📢", "Public Property": "🏛️", Other: "📌" };
+/* ── World-class empty state ── */
+function EmptyFeedState({ onSpeak }) {
+  return (
+    <div style={{ padding: "48px 24px", textAlign: "center" }}>
+      <div style={{ position: "relative", display: "inline-block", marginBottom: 24 }}>
+        <div style={{ width: 88, height: 88, borderRadius: "50%", background: `linear-gradient(135deg, ${C.purple}30, ${C.accent}15)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", animation: "pulse1 3s ease-in-out infinite", boxShadow: `0 0 40px ${C.purple}25` }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="1.5" strokeLinecap="round"><path d="M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+        </div>
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 10, fontFamily: F.body, letterSpacing: -0.5, color: C.text }}>Be the first voice.</div>
+      <div style={{ color: C.text2, fontSize: 15, lineHeight: 1.6, fontFamily: F.body, marginBottom: 8, maxWidth: 280, margin: "0 auto 8px" }}>
+        Your neighborhood is quiet — which means one voice can start everything.
+      </div>
+      <div style={{ color: C.text3, fontSize: 13, lineHeight: 1.5, fontFamily: F.body, maxWidth: 260, margin: "0 auto 28px" }}>
+        Raise a civic issue. Your neighbors will see it, support it, and together you'll get it fixed.
+      </div>
+      <button onClick={onSpeak} style={{ padding: "14px 32px", borderRadius: 28, background: C.gradient, border: "none", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: F.body, boxShadow: "0 6px 24px rgba(120,86,255,0.35)", letterSpacing: -0.2 }}>
+        Speak Up
+      </button>
+    </div>
+  );
+}
+
+const CAT_ICON = { Water: "💧", Roads: "🛣️", Electricity: "⚡", Sanitation: "🗑️", Parks: "🌳", Traffic: "🚦", Safety: "🔒", Drainage: "🌊", Waste: "♻️", Noise: "📢", "Public Property": "🏛️", Infrastructure: "🏗️", Other: "📌" };
 
 /* ── Streamlined Post Card ── */
 const MILESTONES = [10, 25, 50, 100, 200];
@@ -323,7 +384,7 @@ const CONFETTI_PARTS = [
   { x:   2, y: -42, c: "#7856FF", s:  7, d: 0.13 }, { x:  26, y: -10, c: "#FFB020", s:  9, d: 0.02 },
 ];
 
-function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
+function PostCard({ p, onClick, onSupport, onReport, supported, listIndex = 0 }) {
   const [sparks, setSparks] = useState(false);
   const [confetti, setConfetti] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -358,7 +419,7 @@ function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
     <article onClick={onClick} className={`pressable${heatClass ? ` ${heatClass}` : ""}`} style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, cursor: "pointer", display: "flex", gap: 12, position: "relative", borderLeft: isCritical ? `3px solid ${C.critical}` : "3px solid transparent", animation: `listIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) ${Math.min(listIndex * 50, 300)}ms both` }}>
       <Avatar name={p.author} src={p.avatar_url} verified={p.verified} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Name line: Author · time */}
+        {/* Name line */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "center", minWidth: 0 }}>
             <span style={{ fontWeight: 700, fontSize: 15, fontFamily: F.body, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.author}</span>
@@ -368,7 +429,7 @@ function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
           <button onClick={e => { e.stopPropagation(); setMenuOpen(!menuOpen); }} style={{ background: "none", border: "none", color: C.text3, cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><Ics.More /></button>
         </div>
 
-        {/* Area + tags line */}
+        {/* Area + tags */}
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
           <span style={{ color: C.text2, fontSize: 12, fontFamily: F.body, display: "flex", alignItems: "center", gap: 3 }}>
             <Ics.Pin />{p.area || "Nearby"}
@@ -378,10 +439,10 @@ function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
           <span style={{ padding: "2px 7px", borderRadius: 4, background: C.surface3, color: C.text2, fontSize: 10, fontWeight: 600, fontFamily: F.body }}>{CAT_ICON[p.cat] ? `${CAT_ICON[p.cat]} ` : ""}{p.cat}</span>
         </div>
 
-        {/* Description — capped at 3 lines */}
+        {/* Description */}
         <p style={{ margin: "0 0 10px", fontSize: 15, lineHeight: 1.5, color: C.text, fontFamily: F.body, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.desc}</p>
 
-        {/* Photo with skeleton */}
+        {/* Photo */}
         {p.photos?.[0] && (
           <div onClick={e => { e.stopPropagation(); p._onLightbox?.(p.photos[0]); }} style={{ width: "100%", height: 200, borderRadius: 14, overflow: "hidden", marginBottom: 10, border: `1px solid ${C.border}`, cursor: "zoom-in", position: "relative" }}>
             {!imgLoaded && <div className="skeleton" style={{ position: "absolute", inset: 0 }} />}
@@ -421,7 +482,7 @@ function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
             <div className="slide-up" onClick={e => e.stopPropagation()} style={{ position: "absolute", right: 16, top: 40, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 8px 30px rgba(0,0,0,0.6)", overflow: "hidden", zIndex: 100, minWidth: 160 }}>
               {[{ label: "Share on WhatsApp", icon: "💬", action: shareWhatsApp },
                 { label: "Copy link", icon: "🔗", action: async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/post/${p.id}`); toast("Link copied"); } catch {} } },
-                { label: "Report", icon: "⚠️", action: () => toast("Report submitted", "info") }].map((item, i) => (
+                { label: "Report issue", icon: "⚠️", action: () => { setMenuOpen(false); onReport(); } }].map((item, i) => (
                 <button key={i} onClick={e => { e.stopPropagation(); setMenuOpen(false); item.action(); }} style={{ width: "100%", padding: "11px 14px", background: "none", border: "none", borderTop: i > 0 ? `1px solid ${C.border}` : "none", color: C.text, fontSize: 13, fontWeight: 500, textAlign: "left", cursor: "pointer", fontFamily: F.body, display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 14 }}>{item.icon}</span>{item.label}
                 </button>
@@ -434,8 +495,8 @@ function PostCard({ p, onClick, onSupport, supported, listIndex = 0 }) {
   );
 }
 
-/* ── Bottom Navigation (4 items) ── */
-function BottomNav({ active, unreadCount = 0, onCreateClick }) {
+/* ── Bottom Navigation ── */
+function BottomNav({ active, unreadCount = 0, onCreateClick, onNotifClick }) {
   const navigate = useNavigate();
   return (
     <div className="glass-nav" style={{ display: "flex", justifyContent: "space-around", padding: "8px 0 20px", borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
@@ -451,8 +512,13 @@ function BottomNav({ active, unreadCount = 0, onCreateClick }) {
             <span style={{ fontSize: 9, fontWeight: 600, color: C.text2, position: "relative", zIndex: 1, fontFamily: F.body }}>Create</span>
           </button>
         );
+        const handleClick = () => {
+          if (navigator.vibrate) navigator.vibrate(8);
+          if (n.id === "notifications" && onNotifClick) { onNotifClick(); return; }
+          navigate(n.path);
+        };
         return (
-          <button key={n.id} onClick={() => { if (navigator.vibrate) navigator.vibrate(8); navigate(n.path); }} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52, transition: "color 0.2s", position: "relative" }}>
+          <button key={n.id} onClick={handleClick} style={{ background: "none", border: "none", color: isActive ? C.purple : C.text2, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52, transition: "color 0.2s", position: "relative" }}>
             <div className={isActive ? "nav-active-icon" : ""} style={{ display: "flex", position: "relative" }}>
               <n.Icon a={isActive} />
               {n.badge > 0 && (
@@ -468,12 +534,4 @@ function BottomNav({ active, unreadCount = 0, onCreateClick }) {
       })}
     </div>
   );
-}
-
-function timeAgo(ts) {
-  const diff = (Date.now() - new Date(ts)) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-  return Math.floor(diff / 86400) + "d ago";
 }

@@ -18,7 +18,7 @@ export default function Registration() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, saveProfile } = useAuth();
-  const phone = location.state?.phone || "+91 9876543219";
+  const phone = location.state?.phone || "";
   const avatarInputRef = useRef(null);
 
   const [step, setStep] = useState(0);
@@ -33,15 +33,22 @@ export default function Registration() {
   const checkUsername = async (val) => {
     set("username", val);
     if (val.length < 3) { setUsernameStatus(""); return; }
-    const { data } = await supabase.from("profiles").select("id").eq("username", val).maybeSingle();
-    setUsernameStatus(data ? "taken" : "available");
+    try {
+      const { data } = await supabase.from("profiles").select("id").eq("username", val).maybeSingle();
+      setUsernameStatus(data ? "taken" : "available");
+    } catch {
+      setUsernameStatus("");
+    }
   };
 
   const dobValid = () => {
     const { dd, mm, yyyy } = form.dob;
     if (!dd || !mm || !yyyy) return false;
     const d = parseInt(dd), m = parseInt(mm), y = parseInt(yyyy);
-    return d >= 1 && d <= 31 && m >= 1 && m <= 12 && y >= 1920 && y <= 2020;
+    if (d < 1 || m < 1 || m > 12 || y < 1920 || y > 2015) return false;
+    // Validate the actual calendar date (catches Feb 31, Apr 31, etc.)
+    const date = new Date(y, m - 1, d);
+    return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
   };
 
   const handleAvatarPick = async (e) => {
@@ -55,7 +62,7 @@ export default function Registration() {
       const { data } = supabase.storage.from("post-images").getPublicUrl(path);
       setAvatarUrl(data.publicUrl + "?t=" + Date.now());
     } catch (err) {
-      toast("Upload failed", "error");
+      toast("Upload failed — try again", "error");
     }
     setAvatarUploading(false);
     e.target.value = "";
@@ -84,7 +91,7 @@ export default function Registration() {
       navigate("/success");
     } catch (e) {
       console.error("Profile save error:", e);
-      toast(e?.message || "Could not create account. Try again.", "error");
+      toast(e?.message || "Couldn't create your profile. Try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -116,8 +123,8 @@ export default function Registration() {
         {/* Step 1: Identity */}
         {step === 0 && (
           <div className="fade-in" key="step-0">
-            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>Who are you?</div>
-            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>Your profile picture and name will be visible to others when you speak up.</p>
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>Make your mark.</div>
+            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>Your name and photo are how your community knows you're real. Own it.</p>
 
             {/* Avatar */}
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
@@ -145,21 +152,21 @@ export default function Registration() {
                 <input placeholder="e.g. aditya_k" value={form.username} onChange={e => checkUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} style={{ width: "100%", padding: "14px", background: "transparent", border: "none", color: C.text, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: F.body }} />
               </div>
             </div>
-            {usernameStatus === "taken" && <div style={{ color: C.red, fontSize: 12, marginBottom: 16, marginTop: 4, fontFamily: F.body }}>That username is taken.</div>}
-            {usernameStatus === "available" && <div style={{ color: C.green, fontSize: 12, marginBottom: 16, marginTop: 4, fontFamily: F.body }}>✓ Available</div>}
+            {usernameStatus === "taken" && <div style={{ color: C.red, fontSize: 12, marginBottom: 16, marginTop: 4, fontFamily: F.body }}>That username is already taken.</div>}
+            {usernameStatus === "available" && <div style={{ color: C.green, fontSize: 12, marginBottom: 16, marginTop: 4, fontFamily: F.body }}>✓ You're good to go</div>}
             {!usernameStatus && <div style={{ height: 20 }} />}
 
-            <Btn onClick={() => setStep(1)} disabled={!canStep1}>Next</Btn>
+            <Btn onClick={() => setStep(1)} disabled={!canStep1}>Continue</Btn>
           </div>
         )}
 
         {/* Step 2: Personal info */}
         {step === 1 && (
           <div className="fade-in" key="step-1">
-            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>A little about you</div>
-            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>This helps us verify you're a real resident. None of this is shown publicly.</p>
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>A bit about you.</div>
+            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>This helps us confirm you're a real resident — none of it is ever shown publicly.</p>
 
-            <Input label="Mobile Number *" value={phone} disabled />
+            {phone && <Input label="Mobile Number *" value={phone} disabled />}
 
             {/* Gender */}
             <div style={{ marginBottom: 20 }}>
@@ -179,23 +186,26 @@ export default function Registration() {
                   <input key={f.k} placeholder={f.p} value={form.dob[f.k]} onChange={e => set("dob", { ...form.dob, [f.k]: e.target.value.replace(/\D/g, "") })} maxLength={f.m} style={{ flex: f.k === "yyyy" ? 2 : 1, padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", textAlign: "center", fontFamily: F.body }} />
                 ))}
               </div>
+              {form.dob.dd && form.dob.mm && form.dob.yyyy?.length === 4 && !dobValid() && (
+                <div style={{ color: C.red, fontSize: 12, marginTop: 6, fontFamily: F.body }}>Please enter a valid date of birth.</div>
+              )}
             </div>
 
-            <Btn onClick={() => setStep(2)} disabled={!canStep2}>Next</Btn>
+            <Btn onClick={() => setStep(2)} disabled={!canStep2}>Continue</Btn>
           </div>
         )}
 
         {/* Step 3: Location */}
         {step === 2 && (
           <div className="fade-in" key="step-2">
-            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>Where do you live?</div>
-            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>We'll show you civic issues near your residence and route your requests to the right representative.</p>
+            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4, fontFamily: F.body }}>Drop your pin.</div>
+            <p style={{ color: C.text2, fontSize: 14, marginBottom: 24, marginTop: 0, lineHeight: 1.5, fontFamily: F.body }}>We'll surface issues close to home and make sure your voice reaches the right people.</p>
 
             <Input label="Residence *" placeholder="Colony / Area, City" value={form.residence} onChange={e => set("residence", e.target.value)} right={<Ics.Pin />} />
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: C.purpleDim, border: `1px solid ${C.purple}30`, borderRadius: 10, marginBottom: 24, color: C.purple, fontSize: 13, fontFamily: F.body }}>
               <Ics.Shield />
-              <span>Your ID will be verified within 24 hours</span>
+              <span>Your profile will be reviewed within 24 hours</span>
             </div>
 
             <Btn onClick={handleSubmit} disabled={!canStep3} loading={loading}>Create Account</Btn>

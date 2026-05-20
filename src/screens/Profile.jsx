@@ -139,7 +139,7 @@ export default function Profile() {
         ) : (
           <div style={{ background: `${C.amber}12`, border: `1px solid ${C.amber}30`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
             <Ics.Info />
-            <span style={{ color: C.amber, fontSize: 13, flex: 1, fontFamily: F.body }}>Verification pending — your identity will be reviewed</span>
+            <span style={{ color: C.amber, fontSize: 13, flex: 1, fontFamily: F.body }}>Verification pending — we'll review your profile within 24 hours</span>
           </div>
         )}
 
@@ -165,34 +165,51 @@ export default function Profile() {
         {settingsSheet === "about" && (
           <>
             <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 12px", fontFamily: F.body }}>About i²</h3>
-            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>i² is a civic-engagement platform built on one idea: when two voices square, they become louder than ten.</p>
-            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>Raise issues in your area, support your neighbors' concerns, and send private requests directly to your elected representatives — all in one place.</p>
-            <p style={{ color: C.text3, fontSize: 12, margin: "12px 0 16px", fontFamily: F.body }}>Version 1.0.0 · Made in Hyderabad</p>
+            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>i² is built on a simple idea: when two voices square together, they become louder than ten.</p>
+            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>Raise civic issues publicly, rally your neighbors behind what matters, and send private requests directly to your elected representatives — all in one place, built for real residents.</p>
+            <p style={{ color: C.text3, fontSize: 12, margin: "12px 0 16px", fontFamily: F.body }}>Version 1.0.0 · Built in Hyderabad</p>
             <Btn onClick={() => setSettingsSheet(null)}>Got it</Btn>
           </>
         )}
         {settingsSheet === "terms" && (
           <>
-            <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 12px", fontFamily: F.body }}>Terms & Privacy</h3>
-            {[["Your data", "We collect only what's needed to verify you're a real resident and route your requests to the right representative."], ["Anonymous posts", "When you choose anonymous, your identity is never shown publicly, but platform administrators retain audit access for abuse prevention."], ["Personal requests", "Shared only with the representative you select. Not visible to other users."]].map(([title, text]) => (
-              <p key={title} style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 10px", fontFamily: F.body }}><strong style={{ color: C.text }}>{title}:</strong> {text}</p>
+            <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 16px", fontFamily: F.body }}>Terms & Privacy</h3>
+            {[
+              ["Your data", "We collect only what's needed: your phone number, name, and residence. We use it to verify you're a real resident and surface issues relevant to your area."],
+              ["Anonymous posts", "When you post anonymously, your identity is hidden from all other users of this app. Only platform administrators retain access for abuse prevention and legal compliance."],
+              ["Personal requests", "Private requests are shared only with the elected representative you select. No other user can see them."],
+              ["We never sell your data", "Your information is never sold to advertisers, shared with third parties, or used for anything beyond making this platform work."],
+            ].map(([title, text]) => (
+              <p key={title} style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>
+                <strong style={{ color: C.text }}>{title}: </strong>{text}
+              </p>
             ))}
-            <div style={{ height: 16 }} />
-            <Btn onClick={() => setSettingsSheet(null)}>Close</Btn>
+            <div style={{ height: 8 }} />
+            <Btn onClick={() => setSettingsSheet(null)}>Got it</Btn>
           </>
         )}
         {settingsSheet === "security" && (
           <>
             <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 12px", fontFamily: F.body }}>Security</h3>
-            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px", fontFamily: F.body }}>Your account uses anonymous authentication. Your data is stored securely on encrypted servers.</p>
-            {[{ label: "Authentication", value: "Anonymous" }, { label: "Data encryption", value: "AES-256" }, { label: "Active sessions", value: "This device" }].map((row, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: i < 2 ? `1px solid ${C.border}` : "none" }}>
-                <span style={{ fontSize: 14, fontFamily: F.body }}>{row.label}</span>
-                <span style={{ fontSize: 14, color: C.text2, fontFamily: F.body }}>{row.value}</span>
+            <p style={{ color: C.text2, fontSize: 14, lineHeight: 1.6, margin: "0 0 16px", fontFamily: F.body }}>Your data is stored on encrypted servers with strict access controls.</p>
+            {[
+              { label: "Identity on posts", value: "Private by default" },
+              { label: "Visible to other users", value: "Only if you choose" },
+              { label: "Data encryption", value: "AES-256" },
+              { label: "Active sessions", value: "This device" },
+            ].map((row, i, arr) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "12px 0", borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                <span style={{ fontSize: 14, fontFamily: F.body, color: C.text }}>{row.label}</span>
+                <span style={{ fontSize: 13, color: C.text2, fontFamily: F.body, textAlign: "right", maxWidth: 160 }}>{row.value}</span>
               </div>
             ))}
+            <div style={{ marginTop: 16, padding: "12px 14px", background: C.purpleDim, border: `1px solid ${C.purple}30`, borderRadius: 10 }}>
+              <p style={{ margin: 0, fontSize: 13, color: C.purple, lineHeight: 1.5, fontFamily: F.body }}>
+                <strong>What "Anonymous" means:</strong> When you post anonymously, other users of this app — including your neighbors — will never see your name, photo, or profile. Only internal platform administrators can see authorship for abuse prevention.
+              </p>
+            </div>
             <div style={{ height: 20 }} />
-            <Btn onClick={() => setSettingsSheet(null)}>Close</Btn>
+            <Btn onClick={() => setSettingsSheet(null)}>Got it</Btn>
           </>
         )}
       </BottomSheet>

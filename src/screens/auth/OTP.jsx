@@ -14,11 +14,18 @@ export default function OTP() {
   const refs = [useRef(), useRef(), useRef(), useRef(), useRef()];
   const navigate = useNavigate();
   const location = useLocation();
-  const { profile, signIn } = useAuth();
+  const { signIn } = useAuth();
   const phone = location.state?.phone || "+91 XXXXXXXXXX";
   const [resendCd, setResendCd] = useState(0);
 
-  useEffect(() => { refs[0].current?.focus(); }, []);
+  // Auto-fill 12345 on mount
+  useEffect(() => {
+    const filled = ["1", "2", "3", "4", "5"];
+    setDigits(filled);
+    // Short delay so the UI renders the filled state before auto-verifying
+    const t = setTimeout(() => verify("12345"), 400);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (resendCd <= 0) return;
@@ -41,11 +48,10 @@ export default function OTP() {
   };
 
   const verify = async (code) => {
-    if (code !== "12345") { setError("Incorrect OTP. Please try again."); return; }
+    if (code !== "12345") { setError("Incorrect code. Please try again."); return; }
     setLoading(true);
     try {
       await signIn();
-      // After signIn, fetch profile fresh from DB to decide routing
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data: prof } = await supabase.from("profiles").select("name").eq("id", session.user.id).maybeSingle();
@@ -72,15 +78,11 @@ export default function OTP() {
       <Header title="" onBack={() => navigate("/login")} />
       <div style={{ padding: "32px 24px", flex: 1, display: "flex", flexDirection: "column" }}>
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5, fontFamily: F.body }}>Enter OTP</div>
+          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5, fontFamily: F.body }}>Verify your number</div>
         </div>
-        <p style={{ color: C.text2, fontSize: 14, marginBottom: 12, lineHeight: 1.5, fontFamily: F.body }}>
-          Sent to <span style={{ color: C.text, fontWeight: 700 }}>{phone}</span>
+        <p style={{ color: C.text2, fontSize: 14, marginBottom: 32, lineHeight: 1.5, fontFamily: F.body }}>
+          A 5-digit code was sent to <span style={{ color: C.text, fontWeight: 700 }}>{phone}</span>
         </p>
-        <div style={{ padding: "10px 14px", background: C.purpleDim, border: `1px solid ${C.purple}30`, borderRadius: 10, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 16 }}>🔑</span>
-          <span style={{ fontSize: 13, color: C.purple, fontWeight: 600, fontFamily: F.body }}>Demo mode — enter <strong>1 2 3 4 5</strong></span>
-        </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12, justifyContent: "center" }}>
           {digits.map((d, i) => (
@@ -100,11 +102,11 @@ export default function OTP() {
         {error && <div style={{ color: C.red, fontSize: 13, textAlign: "center", marginBottom: 16, fontFamily: F.body }}>{error}</div>}
 
         <Btn onClick={() => verify(otp)} disabled={otp.length < 5} loading={loading}>
-          Verify
+          Verify & Continue
         </Btn>
 
-        <button onClick={() => { if (resendCd > 0) return; toast("OTP resent to " + phone, "info"); setResendCd(30); }} disabled={resendCd > 0} style={{ background: "none", border: "none", color: resendCd > 0 ? C.text3 : C.text2, fontSize: 14, marginTop: 20, cursor: resendCd > 0 ? "default" : "pointer", fontFamily: F.body, opacity: resendCd > 0 ? 0.6 : 1 }}>
-          {resendCd > 0 ? `Resend OTP (${resendCd}s)` : "Resend OTP"}
+        <button onClick={() => { if (resendCd > 0) return; toast("Code resent to " + phone, "info"); setResendCd(30); }} disabled={resendCd > 0} style={{ background: "none", border: "none", color: resendCd > 0 ? C.text3 : C.text2, fontSize: 14, marginTop: 20, cursor: resendCd > 0 ? "default" : "pointer", fontFamily: F.body, opacity: resendCd > 0 ? 0.6 : 1 }}>
+          {resendCd > 0 ? `Resend code (${resendCd}s)` : "Resend code"}
         </button>
       </div>
     </PhoneFrame>

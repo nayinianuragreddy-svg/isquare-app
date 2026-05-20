@@ -3,20 +3,68 @@ import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
 import PhoneFrame from "../components/PhoneFrame";
 import { Header } from "../components/shared";
 import { C, F } from "../constants/theme";
 
 const SEVERITY_COLOR = { Critical: "#F04438", High: "#FFB020", Routine: "#7856FF" };
-const HYDERABAD = [17.385, 78.4867];
+const DEFAULT_CENTER = [17.385, 78.4867]; // Hyderabad fallback
+
+async function geocodeResidence(residence) {
+  if (!residence) return null;
+  try {
+    const q = encodeURIComponent(residence + ", India");
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
+      headers: { "Accept-Language": "en" },
+    });
+    const data = await res.json();
+    if (data?.[0]) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+  } catch { /* fallback to default */ }
+  return null;
+}
 
 export default function MapView() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const [posts, setPosts] = useState([]);
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState("All");
+  const [centerReady, setCenterReady] = useState(false);
+  const centerRef = useRef(DEFAULT_CENTER);
+
+  // Determine map center from user location or profile residence
+  useEffect(() => {
+    const initCenter = async () => {
+      // Try GPS first
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            centerRef.current = [pos.coords.latitude, pos.coords.longitude];
+            setCenterReady(true);
+          },
+          async () => {
+            // GPS denied — try geocoding the profile residence
+            if (profile?.residence) {
+              const coords = await geocodeResidence(profile.residence);
+              if (coords) centerRef.current = coords;
+            }
+            setCenterReady(true);
+          },
+          { timeout: 5000 }
+        );
+      } else if (profile?.residence) {
+        const coords = await geocodeResidence(profile.residence);
+        if (coords) centerRef.current = coords;
+        setCenterReady(true);
+      } else {
+        setCenterReady(true);
+      }
+    };
+    initCenter();
+  }, [profile?.residence]);
 
   useEffect(() => {
     supabase
@@ -29,9 +77,9 @@ export default function MapView() {
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || mapInstance.current) return;
+    if (!mapRef.current || mapInstance.current || !centerReady) return;
 
-    mapInstance.current = L.map(mapRef.current, { zoomControl: false }).setView(HYDERABAD, 13);
+    mapInstance.current = L.map(mapRef.current, { zoomControl: false }).setView(centerRef.current, 13);
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: "© OpenStreetMap © CARTO",
       maxZoom: 19,
@@ -42,7 +90,7 @@ export default function MapView() {
     return () => {
       if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
     };
-  }, []);
+  }, [centerReady]);
 
   useEffect(() => {
     if (!mapInstance.current) return;
@@ -66,13 +114,13 @@ export default function MapView() {
 
       marker.on("click", () => setSelected(p));
     });
-  }, [posts, filter]);
+  }, [posts, filter, centerReady]);
 
   const visibleCount = filter === "All" ? posts.length : posts.filter(p => p.severity === filter).length;
 
   return (
     <PhoneFrame>
-      <Header title="Issues Map" onBack={() => navigate("/feed")} />
+      <Header title="Issues Map" onBack={() => navigate(-1)} />
 
       {/* Filter chips */}
       <div style={{ display: "flex", gap: 8, padding: "10px 16px", borderBottom: `1px solid ${C.border}`, background: C.bg, flexShrink: 0, overflowX: "auto" }}>
@@ -91,7 +139,7 @@ export default function MapView() {
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(10,10,15,0.85)", zIndex: 1000, pointerEvents: "none" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📍</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.text, fontFamily: F.body, marginBottom: 6 }}>No mapped issues yet</div>
-            <div style={{ fontSize: 13, color: C.text2, fontFamily: F.body, textAlign: "center", maxWidth: 220 }}>Issues appear here when users share their GPS location while posting.</div>
+            <div style={{ fontSize: 13, color: C.text2, fontFamily: F.body, textAlign: "center", maxWidth: 220 }}>Issues appear on this map when users share GPS while posting.</div>
           </div>
         )}
 

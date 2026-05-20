@@ -6,6 +6,7 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Header } from "../components/shared";
 import { C, F } from "../constants/theme";
 import { I2Logo } from "../components/icons";
+import { timeAgo } from "../lib/timeAgo";
 import { toast } from "../lib/toast";
 
 const TYPE_ICON = { vote: "🔥", comment: "💬", status_change: "✅", merge_accepted: "🤝", default: "📢" };
@@ -65,14 +66,6 @@ export default function Notifications() {
       .eq("read", false);
   };
 
-  const timeAgo = (ts) => {
-    const diff = (Date.now() - new Date(ts)) / 1000;
-    if (diff < 60) return "just now";
-    if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-    if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-    return Math.floor(diff / 86400) + "d ago";
-  };
-
   return (
     <PhoneFrame>
       <Header title="Notifications" onBack={() => navigate("/feed")} />
@@ -104,8 +97,8 @@ export default function Notifications() {
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={C.purple} strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
               </div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>All quiet here</div>
-            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, maxWidth: 260, margin: "0 auto" }}>When someone supports or replies to your issues, you'll be notified here.</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, fontFamily: F.body, letterSpacing: -0.3 }}>Nothing yet.</div>
+            <div style={{ color: C.text2, fontSize: 14, lineHeight: 1.5, fontFamily: F.body, maxWidth: 260, margin: "0 auto" }}>When neighbors support your issue or officials respond, you'll see it here first.</div>
           </div>
         ) : (
           <>

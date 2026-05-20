@@ -6,10 +6,11 @@ import PhoneFrame from "../components/PhoneFrame";
 import { Header, Avatar, StatusBadge, SeverityTag, I2Button, BottomSheet, Lightbox, Skeleton } from "../components/shared";
 import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
+import { timeAgo } from "../lib/timeAgo";
 import { toast } from "../lib/toast";
 
 const STATUS_STEPS = ["Open", "Pending", "In Progress", "Resolved"];
-const CAT_ICON = { Water: "💧", Roads: "🛣️", Electricity: "⚡", Sanitation: "🗑️", Parks: "🌳", Traffic: "🚦", Safety: "🔒", Drainage: "🌊", Waste: "♻️", Noise: "📢", "Public Property": "🏛️", Other: "📌" };
+const CAT_ICON = { Water: "💧", Roads: "🛣️", Electricity: "⚡", Sanitation: "🗑️", Parks: "🌳", Traffic: "🚦", Safety: "🔒", Drainage: "🌊", Waste: "♻️", Noise: "📢", "Public Property": "🏛️", Infrastructure: "🏗️", Other: "📌" };
 
 export default function PostDetail() {
   const navigate = useNavigate();
@@ -54,99 +55,148 @@ export default function PostDetail() {
   }, [id]);
 
   const fetchPost = async () => {
-    const { data } = await supabase
-      .from("posts")
-      .select("*, profiles(name, username, verified, avatar_url)")
-      .eq("id", id)
-      .single();
-    if (data) setPost({
-      id: data.id, cat: data.category, severity: data.severity,
-      date: timeAgo(data.created_at), fullDate: new Date(data.created_at).toLocaleDateString("en-IN"),
-      desc: data.description, status: data.status, agree: data.agree_count,
-      comments: data.comments_count,
-      author: data.anonymous ? "Anonymous" : (data.profiles?.name || "Citizen"),
-      handle: data.anonymous ? "anonymous" : (data.profiles?.username || "citizen"),
-      verified: !data.anonymous && !!data.profiles?.verified,
-      avatar_url: data.anonymous ? null : (data.profiles?.avatar_url || null),
-      area: data.area || "", photos: data.photos || [], author_id: data.author_id,
-    });
+    try {
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*, profiles(name, username, verified, avatar_url)")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      if (data) setPost({
+        id: data.id, cat: data.category, severity: data.severity,
+        date: timeAgo(data.created_at), fullDate: new Date(data.created_at).toLocaleDateString("en-IN"),
+        desc: data.description, status: data.status, agree: data.agree_count,
+        comments: data.comments_count,
+        author: data.anonymous ? "Anonymous" : (data.profiles?.name || "Citizen"),
+        handle: data.anonymous ? "anonymous" : (data.profiles?.username || "citizen"),
+        verified: !data.anonymous && !!data.profiles?.verified,
+        avatar_url: data.anonymous ? null : (data.profiles?.avatar_url || null),
+        area: data.area || "", photos: data.photos || [], author_id: data.author_id,
+      });
+    } catch (e) {
+      console.error("Post fetch error:", e);
+      toast("Couldn't load post. Try again.", "error");
+    }
   };
 
   const fetchSimilar = async () => {
     if (!post?.cat || !user) return;
-    const { data } = await supabase
-      .from("posts")
-      .select("id, description, category, agree_count, profiles(name)")
-      .eq("category", post.cat)
-      .eq("type", "public")
-      .neq("id", id)
-      .neq("author_id", user.id)
-      .is("merged_into", null)
-      .limit(3);
-    setSimilarPosts(data || []);
+    try {
+      const { data } = await supabase
+        .from("posts")
+        .select("id, description, category, agree_count, profiles(name)")
+        .eq("category", post.cat)
+        .eq("type", "public")
+        .neq("id", id)
+        .neq("author_id", user.id)
+        .is("merged_into", null)
+        .limit(3);
+      setSimilarPosts(data || []);
+    } catch { /* non-critical */ }
   };
 
   const fetchMergeRequests = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("merge_requests")
-      .select("*, posts!requester_post_id(id, description, category, agree_count, profiles(name))")
-      .eq("target_post_id", id)
-      .eq("status", "pending");
-    setMergeRequests(data || []);
+    try {
+      const { data } = await supabase
+        .from("merge_requests")
+        .select("*, posts!requester_post_id(id, description, category, agree_count, profiles(name))")
+        .eq("target_post_id", id)
+        .eq("status", "pending");
+      setMergeRequests(data || []);
+    } catch { /* non-critical */ }
   };
 
   const loadComments = async () => {
-    const { data } = await supabase
-      .from("comments")
-      .select("*, profiles(name, username)")
-      .eq("post_id", id)
-      .order("created_at");
-    setComments((data || []).map(c => ({
-      user: c.profiles?.name || "Citizen",
-      handle: c.profiles?.username || "citizen",
-      time: timeAgo(c.created_at),
-      text: c.text,
-      official: c.is_official || false,
-    })));
+    try {
+      const { data, error } = await supabase
+        .from("comments")
+        .select("*, profiles(name, username)")
+        .eq("post_id", id)
+        .order("created_at");
+      if (error) throw error;
+      setComments((data || []).map(c => ({
+        user: c.profiles?.name || "Citizen",
+        handle: c.profiles?.username || "citizen",
+        time: timeAgo(c.created_at),
+        text: c.text,
+        official: c.is_official || false,
+      })));
+    } catch (e) {
+      console.error("Comments error:", e);
+    }
   };
 
   const checkVote = async () => {
     if (!user) return;
-    const { data } = await supabase.from("votes").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle();
-    setSupported(!!data);
+    try {
+      const { data } = await supabase.from("votes").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle();
+      setSupported(!!data);
+    } catch { /* non-critical */ }
   };
 
   const toggleSupport = async () => {
     if (!user || !post) return;
     const wasSupported = supported;
+    // Optimistic update
     setSupported(s => !s);
     setPost(p => ({ ...p, agree: p.agree + (wasSupported ? -1 : 1) }));
-    if (wasSupported) {
-      await supabase.from("votes").delete().eq("post_id", id).eq("user_id", user.id);
-    } else {
-      toast("Your voice added");
-      await supabase.from("votes").insert({ post_id: id, user_id: user.id });
+    try {
+      if (wasSupported) {
+        const { error } = await supabase.from("votes").delete().eq("post_id", id).eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        toast("Your voice added");
+        const { error } = await supabase.from("votes").insert({ post_id: id, user_id: user.id });
+        if (error) throw error;
+      }
+    } catch {
+      // Rollback on failure
+      setSupported(wasSupported);
+      setPost(p => ({ ...p, agree: p.agree + (wasSupported ? 1 : -1) }));
+      toast("Action failed. Try again.", "error");
     }
   };
 
   const submitReply = async () => {
-    if (!replyText.trim() || !user) return;
+    if (!replyText.trim() || !user || loading) return;
     setLoading(true);
-    const text = replyText.trim();
-    setReplyText("");
-    await supabase.from("comments").insert({ post_id: id, author_id: user.id, text });
-    setPost(p => p ? { ...p, comments: (p.comments || 0) + 1 } : p);
-    toast("Reply posted");
-    setLoading(false);
+    const text = replyText.trim(); // Save before clearing
+    try {
+      const { error } = await supabase.from("comments").insert({ post_id: id, author_id: user.id, text });
+      if (error) throw error;
+      setReplyText(""); // Clear only after success
+      setReplyFocused(false);
+      setPost(p => p ? { ...p, comments: (p.comments || 0) + 1 } : p);
+      toast("Reply posted");
+    } catch (e) {
+      toast("Couldn't post reply. Try again.", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reportPost = async () => {
+    if (!user) return;
+    try {
+      await supabase.from("reports").insert({ post_id: id, reporter_id: user.id, reason: "Flagged by user" });
+      toast("Report submitted — we'll review it", "info");
+    } catch {
+      toast("Couldn't submit report. Try again.", "error");
+    }
   };
 
   const requestMerge = async (targetId) => {
     if (!user) return;
     setMergesSent(p => ({ ...p, [targetId]: "sending" }));
-    await supabase.from("merge_requests").insert({ requester_post_id: id, target_post_id: targetId, requester_id: user.id });
-    setMergesSent(p => ({ ...p, [targetId]: "sent" }));
-    toast("Merge request sent");
+    try {
+      await supabase.from("merge_requests").insert({ requester_post_id: id, target_post_id: targetId, requester_id: user.id });
+      setMergesSent(p => ({ ...p, [targetId]: "sent" }));
+      toast("Merge request sent");
+    } catch {
+      setMergesSent(p => ({ ...p, [targetId]: null }));
+      toast("Couldn't send merge request.", "error");
+    }
   };
 
   const handleMerge = async (req, accept) => {
@@ -160,7 +210,7 @@ export default function PostDetail() {
     await supabase.from("posts").update({ merged_into: id, status: "Merged", agree_count: 0 }).eq("id", reqPost.id);
     await supabase.from("posts").update({ agree_count: (post?.agree || 0) + (reqPost.agree_count || 0) }).eq("id", id);
     await supabase.from("merge_requests").update({ status: "accepted" }).eq("id", req.id);
-    await supabase.from("notifications").insert({ user_id: req.requester_id, type: "merge_accepted", title: "Merge accepted! 🤝", body: `Your ${reqPost.category} post was merged. Combined voices are louder.`, post_id: id });
+    await supabase.from("notifications").insert({ user_id: req.requester_id, type: "merge_accepted", title: "Merge accepted! 🤝", body: `Your ${reqPost.category} post was merged — combined voices are louder.`, post_id: id });
     setPost(p => ({ ...p, agree: (p?.agree || 0) + (reqPost.agree_count || 0) }));
     setMergeRequests(prev => prev.filter(r => r.id !== req.id));
     toast("Issues merged! Voices combined 🤝");
@@ -175,21 +225,30 @@ export default function PostDetail() {
 
   const handleEdit = async () => {
     if (!editDesc.trim()) return;
-    await supabase.from("posts").update({ description: editDesc.trim() }).eq("id", id);
-    setPost(p => ({ ...p, desc: editDesc.trim() }));
-    setEditMode(false);
-    toast("Post updated");
+    try {
+      const { error } = await supabase.from("posts").update({ description: editDesc.trim() }).eq("id", id);
+      if (error) throw error;
+      setPost(p => ({ ...p, desc: editDesc.trim() }));
+      setEditMode(false);
+      toast("Post updated");
+    } catch {
+      toast("Couldn't save changes. Try again.", "error");
+    }
   };
 
   const handleDelete = async () => {
-    await supabase.from("posts").delete().eq("id", id);
-    toast("Post deleted");
-    navigate("/feed");
+    try {
+      await supabase.from("posts").delete().eq("id", id);
+      toast("Post deleted");
+      navigate(-1);
+    } catch {
+      toast("Couldn't delete post. Try again.", "error");
+    }
   };
 
   if (!post) return (
     <PhoneFrame>
-      <Header title="" onBack={() => navigate("/feed")} />
+      <Header title="" onBack={() => navigate(-1)} />
       <div style={{ flex: 1, padding: 16 }}>
         <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
           <Skeleton width={48} height={48} style={{ borderRadius: "50%", flexShrink: 0 }} />
@@ -221,7 +280,7 @@ export default function PostDetail() {
 
   return (
     <PhoneFrame>
-      <Header title="" onBack={() => navigate("/feed")} right={
+      <Header title="" onBack={() => navigate(-1)} right={
         <button onClick={() => setMenuOpen(true)} style={{ background: "none", border: "none", color: C.text2, cursor: "pointer", display: "flex", padding: 4 }}><Ics.More /></button>
       } />
 
@@ -268,7 +327,7 @@ export default function PostDetail() {
               <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} style={{ width: "100%", padding: "12px", background: C.surface2, border: `1px solid ${C.purple}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 80, resize: "none", boxSizing: "border-box", fontFamily: F.body }} />
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button onClick={() => setEditMode(false)} style={{ flex: 1, padding: "10px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text2, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Cancel</button>
-                <button onClick={handleEdit} style={{ flex: 1, padding: "10px", borderRadius: 10, background: C.gradient, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Save</button>
+                <button onClick={handleEdit} style={{ flex: 1, padding: "10px", borderRadius: 10, background: C.gradient, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Save changes</button>
               </div>
             </div>
           ) : (
@@ -360,7 +419,9 @@ export default function PostDetail() {
                   <span style={{ fontSize: 11, color: replyText.length > 240 ? C.amber : C.text3, fontFamily: F.body }}>{replyText.length}/280</span>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => { setReplyFocused(false); setReplyText(""); }} style={{ background: "none", border: "none", color: C.text2, fontSize: 13, cursor: "pointer", fontFamily: F.body, fontWeight: 600 }}>Cancel</button>
-                    <button onClick={submitReply} disabled={!replyText.trim() || loading} style={{ background: replyText.trim() ? C.gradient : C.surface3, border: "none", color: C.text, cursor: replyText.trim() ? "pointer" : "default", padding: "7px 18px", borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: F.body, opacity: replyText.trim() ? 1 : 0.5, transition: "all 0.2s" }}>Reply</button>
+                    <button onClick={submitReply} disabled={!replyText.trim() || loading} style={{ background: replyText.trim() ? C.gradient : C.surface3, border: "none", color: C.text, cursor: replyText.trim() ? "pointer" : "default", padding: "7px 18px", borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: F.body, opacity: replyText.trim() ? 1 : 0.5, transition: "all 0.2s" }}>
+                      {loading ? "Posting..." : "Reply"}
+                    </button>
                   </div>
                 </div>
               )}
@@ -373,7 +434,7 @@ export default function PostDetail() {
           </div>
 
           {comments.length === 0 && (
-            <div style={{ textAlign: "center", padding: "24px 0", color: C.text2, fontSize: 14, fontFamily: F.body }}>No replies yet. Be the first to respond.</div>
+            <div style={{ textAlign: "center", padding: "24px 0", color: C.text2, fontSize: 14, fontFamily: F.body }}>No replies yet — be the first to weigh in.</div>
           )}
 
           {comments.map((c, i) => (
@@ -413,7 +474,7 @@ export default function PostDetail() {
                 </div>
               );
             })}
-            <p style={{ fontSize: 12, color: C.text3, marginTop: 10, lineHeight: 1.5, fontFamily: F.body }}>Merging combines i² counts and makes your voices louder together.</p>
+            <p style={{ fontSize: 12, color: C.text3, marginTop: 10, lineHeight: 1.5, fontFamily: F.body }}>Merging combines i² counts — more voices, louder signal.</p>
           </div>
         )}
       </div>
@@ -425,7 +486,7 @@ export default function PostDetail() {
             { label: "Edit post", action: () => { setMenuOpen(false); setEditDesc(post.desc); setEditMode(true); } },
             { label: "Delete post", action: () => { setMenuOpen(false); setDeleteConfirm(true); }, red: true },
           ] : [
-            { label: "Report this post", action: () => { setMenuOpen(false); toast("Report submitted", "info"); } },
+            { label: "Report this post", action: () => { setMenuOpen(false); reportPost(); } },
           ]),
           { label: "Cancel", action: () => setMenuOpen(false), muted: true }].map((item, i) => (
           <button key={i} onClick={item.action} style={{ width: "100%", padding: "14px 0", background: "none", border: "none", color: item.red ? C.red : item.muted ? C.text2 : C.text, fontSize: 15, fontWeight: 600, textAlign: "left", cursor: "pointer", borderTop: i === 0 ? "none" : `1px solid ${C.border}`, fontFamily: F.body }}>
@@ -440,7 +501,7 @@ export default function PostDetail() {
         <div onClick={() => setDeleteConfirm(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s", padding: "0 24px" }}>
           <div onClick={e => e.stopPropagation()} className="scale-in" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px", width: "100%", maxWidth: 320 }}>
             <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, fontFamily: F.body, color: C.red }}>Delete this post?</div>
-            <div style={{ fontSize: 14, color: C.text2, marginBottom: 20, lineHeight: 1.5, fontFamily: F.body }}>This will permanently remove the post, all votes, and comments. This cannot be undone.</div>
+            <div style={{ fontSize: 14, color: C.text2, marginBottom: 20, lineHeight: 1.5, fontFamily: F.body }}>All votes and replies will be permanently removed. This can't be undone.</div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setDeleteConfirm(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Cancel</button>
               <button onClick={handleDelete} style={{ flex: 1, padding: "12px", borderRadius: 10, background: C.red, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Delete</button>
@@ -450,12 +511,4 @@ export default function PostDetail() {
       )}
     </PhoneFrame>
   );
-}
-
-function timeAgo(ts) {
-  const diff = (Date.now() - new Date(ts)) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-  return Math.floor(diff / 86400) + "d ago";
 }

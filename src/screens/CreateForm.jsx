@@ -8,12 +8,30 @@ import { Ics } from "../components/icons";
 import { C, F } from "../constants/theme";
 import { toast } from "../lib/toast";
 
-const CATEGORIES = ["Water", "Road", "Electricity", "Sanitation", "Traffic", "Infrastructure", "Other"];
+const CATEGORIES = ["Water", "Roads", "Electricity", "Sanitation", "Traffic", "Infrastructure", "Other"];
 const SEVERITIES = [
   { id: "Critical", label: "Critical", desc: "Danger to life or safety", color: "#F04438" },
   { id: "High", label: "High", desc: "Urgent, needs quick action", color: "#FFB020" },
   { id: "Routine", label: "Routine", desc: "Important but not urgent", color: "#8E8E99" },
 ];
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+      { headers: { "Accept-Language": "en" } }
+    );
+    const data = await res.json();
+    const a = data.address || {};
+    const parts = [
+      a.neighbourhood || a.suburb || a.quarter,
+      a.city_district || a.town || a.city || a.village,
+    ].filter(Boolean);
+    return parts.join(", ") || data.display_name?.split(",").slice(0, 2).join(",").trim() || "";
+  } catch {
+    return "";
+  }
+}
 
 export default function CreateForm() {
   const navigate = useNavigate();
@@ -37,7 +55,7 @@ export default function CreateForm() {
 
   const handleBack = () => {
     if (form.desc.trim() || form.area.trim()) setConfirmDiscard(true);
-    else navigate("/feed");
+    else navigate(-1);
   };
 
   const handlePhotoSelect = async (e) => {
@@ -48,10 +66,14 @@ export default function CreateForm() {
     for (const file of files) {
       const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
       const path = `${user.id}/${Date.now()}-${safeName}`;
-      const { error } = await supabase.storage.from("post-images").upload(path, file, { upsert: false });
-      if (!error) {
-        const { data } = supabase.storage.from("post-images").getPublicUrl(path);
-        urls.push(data.publicUrl);
+      try {
+        const { error } = await supabase.storage.from("post-images").upload(path, file, { upsert: false });
+        if (!error) {
+          const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+          urls.push(data.publicUrl);
+        }
+      } catch (err) {
+        toast("Photo upload failed", "error");
       }
     }
     setPhotos(prev => [...prev, ...urls].slice(0, 3));
@@ -62,12 +84,33 @@ export default function CreateForm() {
   const removePhoto = (idx) => setPhotos(prev => prev.filter((_, i) => i !== idx));
 
   const getLocation = () => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      toast("GPS not supported on this device", "error");
+      return;
+    }
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      pos => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsLoading(false); },
-      () => setGpsLoading(false),
-      { timeout: 8000 }
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setCoords({ lat, lng });
+        setGpsLoading(false);
+        const area = await reverseGeocode(lat, lng);
+        if (area) {
+          set("area", area);
+          toast("Location detected", "success");
+        } else {
+          toast("GPS captured — enter area manually", "info");
+        }
+      },
+      (err) => {
+        setGpsLoading(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          toast("Location access denied. Please enable GPS in settings.", "error");
+        } else {
+          toast("Couldn't get your location. Try again.", "error");
+        }
+      },
+      { timeout: 8000, enableHighAccuracy: true }
     );
   };
 
@@ -75,7 +118,7 @@ export default function CreateForm() {
     if (!canSubmit || !user) return;
     setLoading(true);
     try {
-      await supabase.from("posts").insert({
+      const { error } = await supabase.from("posts").insert({
         author_id: user.id,
         type: postType,
         severity: form.severity,
@@ -84,7 +127,7 @@ export default function CreateForm() {
         area: form.area.trim(),
         status: "Open",
         anonymous: postType === "public" && anonymous,
-        loc_id: "resident",
+        loc_id: profile?.id || null,
         send_to: postType === "private" ? sendTo : null,
         routed_to: postType === "private" ? `${sendTo} Office` : null,
         agree_count: 0,
@@ -92,10 +135,11 @@ export default function CreateForm() {
         photos,
         ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
       });
+      if (error) throw error;
       navigate("/post-success", { state: { type: postType } });
     } catch (e) {
       console.error(e);
-      toast(e?.message || "Could not post. Try again.", "error");
+      toast(e?.message || "Couldn't post. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -111,14 +155,14 @@ export default function CreateForm() {
           <span style={{ fontWeight: 600 }}>{postType === "public" ? "Visible to everyone in your area" : "Private — only your representative sees this"}</span>
         </div>
 
-        <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>What's happening? *</label>
-        <textarea placeholder="Describe the issue clearly. More detail = faster action." value={form.desc} onChange={e => { if (e.target.value.length <= 500) set("desc", e.target.value); }} style={{ width: "100%", padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 100, resize: "none", marginBottom: 4, boxSizing: "border-box", fontFamily: F.body }} />
+        <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>What's the issue? *</label>
+        <textarea placeholder="Be specific — street name, block number, what's broken and since when. More detail = faster action." value={form.desc} onChange={e => { if (e.target.value.length <= 500) set("desc", e.target.value); }} style={{ width: "100%", padding: "14px", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 14, outline: "none", height: 100, resize: "none", marginBottom: 4, boxSizing: "border-box", fontFamily: F.body }} />
         <div style={{ textAlign: "right", fontSize: 11, color: form.desc.length > 450 ? C.amber : C.text3, marginBottom: 16, fontFamily: F.body }}>{form.desc.length}/500</div>
 
         <div style={{ position: "relative" }}>
           <Input label="Area *" placeholder="Street, landmark, block number" value={form.area} onChange={e => set("area", e.target.value)} right={<Ics.Pin />} />
           <button onClick={getLocation} type="button" style={{ position: "absolute", right: 42, top: 36, background: "none", border: "none", padding: "4px 8px", cursor: "pointer", fontSize: 11, color: coords ? C.green : C.purple, fontWeight: 700, fontFamily: F.body }}>
-            {gpsLoading ? "..." : coords ? "✓ GPS" : "Use GPS"}
+            {gpsLoading ? "locating..." : coords ? "✓ GPS" : "Use GPS"}
           </button>
         </div>
 
@@ -133,7 +177,7 @@ export default function CreateForm() {
 
         {/* Severity */}
         <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>Severity *</label>
+          <label style={{ display: "block", color: C.text, fontSize: 14, fontWeight: 700, marginBottom: 8, fontFamily: F.body }}>How urgent is it? *</label>
           <div style={{ display: "flex", gap: 8 }}>
             {SEVERITIES.map(s => (
               <button key={s.id} onClick={() => set("severity", s.id)} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, background: form.severity === s.id ? `${s.color}20` : C.surface2, border: `1px solid ${form.severity === s.id ? s.color : C.border}`, cursor: "pointer", transition: "all 0.2s", textAlign: "center" }}>
@@ -175,7 +219,10 @@ export default function CreateForm() {
             <div style={{ width: 18, height: 18, border: `2px solid ${anonymous ? C.purple : C.border}`, borderRadius: 4, flexShrink: 0, background: anonymous ? C.purple : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {anonymous && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M20 6L9 17l-5-5" /></svg>}
             </div>
-            <span style={{ fontSize: 13, color: anonymous ? C.purple : C.text2, flex: 1, fontWeight: anonymous ? 700 : 400, fontFamily: F.body }}>Post anonymously (your identity stays hidden)</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: anonymous ? C.purple : C.text, fontWeight: anonymous ? 700 : 500, fontFamily: F.body }}>Post anonymously</div>
+              <div style={{ fontSize: 11, color: C.text2, marginTop: 2, fontFamily: F.body }}>Other users won't see your name or profile — only you know it was you.</div>
+            </div>
           </div>
         ) : (
           <div style={{ marginBottom: 24 }}>
@@ -197,11 +244,11 @@ export default function CreateForm() {
       {confirmDiscard && (
         <div onClick={() => setConfirmDiscard(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s", padding: "0 24px" }}>
           <div onClick={e => e.stopPropagation()} className="scale-in" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 16, padding: "20px", width: "100%", maxWidth: 320 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, fontFamily: F.body }}>Discard changes?</div>
-            <div style={{ fontSize: 14, color: C.text2, marginBottom: 20, lineHeight: 1.5, fontFamily: F.body }}>You have unsaved text. If you leave now, it will be lost.</div>
+            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 8, fontFamily: F.body }}>Discard draft?</div>
+            <div style={{ fontSize: 14, color: C.text2, marginBottom: 20, lineHeight: 1.5, fontFamily: F.body }}>You have unsaved changes. Leave now and they're gone.</div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setConfirmDiscard(false)} style={{ flex: 1, padding: "12px", borderRadius: 10, background: "transparent", border: `1px solid ${C.border}`, color: C.text, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Keep editing</button>
-              <button onClick={() => { setConfirmDiscard(false); navigate("/feed"); }} style={{ flex: 1, padding: "12px", borderRadius: 10, background: C.red, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Discard</button>
+              <button onClick={() => { setConfirmDiscard(false); navigate(-1); }} style={{ flex: 1, padding: "12px", borderRadius: 10, background: C.red, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: F.body }}>Discard</button>
             </div>
           </div>
         </div>

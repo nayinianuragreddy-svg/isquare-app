@@ -9,9 +9,26 @@ const TOAST_ICON = {
   info: "ℹ",
 };
 
+function useLiveClock() {
+  const [time, setTime] = useState(() => {
+    const now = new Date();
+    return now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  });
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }));
+    };
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return time;
+}
+
 export default function PhoneFrame({ children }) {
   const location = useLocation();
   const [toasts, setToasts] = useState([]);
+  const clock = useLiveClock();
 
   useEffect(() => {
     setToastListener(t => {
@@ -34,16 +51,9 @@ export default function PhoneFrame({ children }) {
       `}</style>
       <div className="i2-frame-wrapper">
         <div className="i2-frame" style={{ background: C.bg, overflow: "hidden", position: "relative" }}>
-          {/* Status Bar */}
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 44, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: C.bg }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>9:41</span>
-            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-              <svg width="16" height="11" viewBox="0 0 16 11"><rect x="0" y="4" width="3" height="7" fill={C.text} rx="1" /><rect x="4.5" y="3" width="3" height="8" fill={C.text} rx="1" /><rect x="9" y="1" width="3" height="10" fill={C.text} rx="1" /><rect x="13.5" y="0" width="3" height="11" fill={C.text} rx="1" /></svg>
-              <svg width="16" height="11" viewBox="0 0 24 16" fill="none" stroke={C.text} strokeWidth="2"><path d="M1 8C3 5 7 3 12 3s9 2 11 5M4 11c1.5-1.5 4.5-3 8-3s6.5 1.5 8 3M8 14c1-1 2.5-2 4-2s3 1 4 2" /><circle cx="12" cy="16" r="1.5" fill={C.text} stroke="none" /></svg>
-              <div style={{ width: 24, height: 12, border: `1.5px solid ${C.text}`, borderRadius: 3, padding: "1.5px", display: "flex", alignItems: "center" }}>
-                <div style={{ width: "80%", height: "100%", background: C.text, borderRadius: 1 }} />
-              </div>
-            </div>
+          {/* Status Bar — live clock only */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 44, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px", background: C.bg }}>
+            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0.3 }}>{clock}</span>
           </div>
           {/* Page content with transition */}
           <div style={{ position: "absolute", inset: 0, paddingTop: 44, overflow: "hidden", display: "flex", flexDirection: "column" }}>
